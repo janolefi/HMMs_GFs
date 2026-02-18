@@ -1,9 +1,14 @@
+# installing dev version of packages
+devtools::install_github("janolefi/LaMa")
+devtools::install_github("kaskr/RTMB", subdir = "RTMB")
+devtools::install_github("janolefi/RTMBdist")
+
 library(LaMa)
 library(RTMBdist)
 library(fmesher)
 library(viridis)
 
-color <- c("orange", "deepskyblue", "seagreen2")
+color <- c("orange", "deepskyblue")
 
 data <- readRDS("./data/lions.rds")
 

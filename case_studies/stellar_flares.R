@@ -1,9 +1,12 @@
+# installing dev version of packages
+devtools::install_github("janolefi/LaMa")
+devtools::install_github("kaskr/RTMB", subdir = "RTMB")
+devtools::install_github("janolefi/RTMBdist")
+
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for ExGaussian distribution
 library(fmesher)    # for mesh and FEM matrices
 library(Matrix)     # for sparse matrices
-# source("./functions/forward_banded.R") # sourcing banded forward algorithm (not in LaMa yet)
-# source("./functions/hmm_corr.R")       # sourcing functions for HMM state decoding
 
 ### colors for plotting
 color = c("#00000050", "red", "orange")
