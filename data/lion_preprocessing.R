@@ -94,3 +94,5 @@ head(data, 100)
 
 plot(data$x, data$y)
 
+saveRDS(data, "./data/lions_new.rds")
+
