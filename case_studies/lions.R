@@ -483,6 +483,9 @@ Sys.time() - t1
 
 mod_sp2 <- report(obj_sp2)
 
+sdr <- sdreport(obj_sp2, getJointPrecision = TRUE)
+mod_sp2$sdr <- sdr
+
 mod_sp2$states <- viterbi_g(mod = mod_sp2)
 delta <- prop.table(table(mod_sp2$states))
 
@@ -595,11 +598,40 @@ image(x_seq, y_seq, z2,
       main = "spatial model with periodic var.", bty = "n", asp = 1)
 
 
-# periodically stationary distribution
-Gamma <- tpm_g(Z, mod_sp2$beta)
-Delta <- stationary_p(Gamma)
+### plot periodically stationary state distribution
 
-plot(Delta[,2], type = "b", ylim = c(0,1), col = color[2], lwd = 2)
+Sigma <- mod_sp2$sdr$cov.fixed
+B <- 1000
+thetas <- mvtnorm::rmvnorm(B, mod_sp2$sdr$par.fixed, Sigma)
+betas <- array(dim = c(2, 7, B))
+for(i in 1:B) {
+  betas[,,i] <- matrix(thetas[i,1:14], 2, 7)
+}
+
+tseq <- seq(0, 24, length = 100)
+Deltas <- array(dim = c(length(tseq), 2, B))
+Delta <- matrix(NA, length(tseq), 2)
+
+for(t in seq_along(tseq)) {
+  ts <- tseq[t] + 0:23
+  ts <- ts %% 24
+  Z <- cosinor(ts, period = c(24,12,6))
+  Delta[t,] <-  stationary_p(tpm_g(Z, mod_sp2$beta), t = 1)
+  for(i in 1:B) {
+    Gamma <- tpm_g(Z, betas[,,i])
+    Deltas[t, ,i] <- stationary_p(Gamma, t = 1)
+  }
+}
+Delta_q <- apply(Deltas, 1:2, quantile, probs = c(0.025, 0.975))
+
+par(mfrow = c(1,1))
+plot(tseq, Delta[,2], type = "l", lwd = 3,
+     ylim = c(0,1), col = color[2], bty = "n",
+     ylab = "Pr(active)", xlab = "Time of day", xaxt = "n")
+polygon(c(tseq, rev(tseq)), c(Delta_q[1, ,2], rev(Delta_q[2, ,2])),
+        col = scales::alpha(color[2], 0.25), border = NA)
+axis(1, at = seq(0, 24, by = 6), labels = seq(0, 24, by = 6))
+
 
 
 ## model comparison
