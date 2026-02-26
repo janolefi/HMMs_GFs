@@ -8,6 +8,7 @@ library(RTMBdist)
 library(fmesher)
 library(viridis)
 library(leaflet)
+library(scales)
 
 color <- c("orange", "deepskyblue", "seagreen2")
 
@@ -18,16 +19,16 @@ nrow(data)
 
 
 ## plot data on satellite image
-leaflet() %>%
-  addProviderTiles(providers$Esri.WorldImagery) %>%
-  fitBounds(lng1 = min(data$x, na.rm = TRUE),
-            lat1 = min(data$y, na.rm = TRUE),
-            lng2 = max(data$x, na.rm = TRUE),
-            lat2 = max(data$y, na.rm = TRUE)) %>%
-  addCircleMarkers(lng = data$x,
-                   lat = data$y,
-                   radius = 0.5,
-                   color = "#00000040")
+# leaflet() %>%
+#   addProviderTiles(providers$Esri.WorldImagery) %>%
+#   fitBounds(lng1 = min(data$x, na.rm = TRUE),
+#             lat1 = min(data$y, na.rm = TRUE),
+#             lng2 = max(data$x, na.rm = TRUE),
+#             lat2 = max(data$y, na.rm = TRUE)) %>%
+#   addCircleMarkers(lng = data$x,
+#                    lat = data$y,
+#                    radius = 0.5,
+#                    color = "#00000040")
 
 
 # Homogeneous model -------------------------------------------------------
@@ -182,6 +183,7 @@ points(data$x[idx], data$y[idx], cex = 0.8,
 rm(obj0.3)
 gc()
 
+
 # Model with periodic variation in the tpm --------------------------------
 
 # We know lions are nocturnal so we want to capture this.
@@ -322,7 +324,8 @@ jnll <- function(par) {
   }
 
   ## HMM likelihood
-  nll <- -forward_g(Delta, Gamma, lallprobs, trackID = ID, bw = bw, logspace = TRUE)
+  nll <- -forward_g(Delta, Gamma, lallprobs,
+                     trackID = ID, bw = bw, logspace = TRUE, ad = T)
 
   ## GMRF likelihood
   tau_sq <- exp(log_tau_sq); tau <- sqrt(tau_sq); REPORT(tau)
@@ -337,10 +340,10 @@ jnll <- function(par) {
 
 par <- list(
   eta = qlogis(c(0.1, 0.1)),
-  log_mu = log(c(0.01, 1)),
-  log_sigma = log(c(0.01, 1)),
-  logit_zprob = qlogis(rep(1e-4, 2)),
-  logit_rho_angle = qlogis(c(0.2, 0.3)),
+  log_mu = log(mod0$mu),
+  log_sigma = log(mod0$sigma),
+  logit_zprob = qlogis(mod0$zprob),
+  logit_rho_angle = qlogis(mod0$rho),
   log_tau_sq = log(0.1^2),
   log_kappa_sq = log(10^2),
   w = rep(0, nrow(spde$c0))
@@ -356,7 +359,7 @@ dat <- list(
   c0 = spde$c0, # C
   g1 = spde$g1, # G
   g2 = spde$g2, # G C^{-1} G
-  bw = 10
+  bw = 15
 )
 
 t1 <- Sys.time()
@@ -404,7 +407,7 @@ par(mfrow = c(1,1))
 image(x_seq, y_seq, g1,
       xlab = "x", ylab = "y",
       col = viridis(35),
-      main = "Pr(active -> resting)", bty = "n", asp = 1)
+      main = expression(Pr(active~"→"~resting)), bty = "n", asp = 1)
 
 # idx <- which(mod_sp1$states == 1)
 # points(data$x[-idx], data$y[-idx], col = "#00000040")
@@ -437,7 +440,8 @@ jnll2 <- function(par) {
   }
 
   ## HMM likelihood
-  nll <- -forward_g(Delta, Gamma, lallprobs, trackID = ID, bw = bw, logspace = TRUE)
+  nll <- -forward_g(Delta, Gamma, lallprobs,
+                    trackID = ID, bw = bw, logspace = TRUE)
 
   ## GMRF likelihood
   tau_sq <- exp(log_tau_sq); tau <- sqrt(tau_sq); REPORT(tau)
@@ -452,10 +456,10 @@ jnll2 <- function(par) {
 
 par <- list(
   beta = mod1$beta,
-  log_mu = log(c(0.01, 1)),
-  log_sigma = log(c(0.01, 1)),
-  logit_zprob = qlogis(rep(1e-4, 2)),
-  logit_rho_angle = qlogis(c(0.2, 0.3)),
+  log_mu = log(mod1$mu),
+  log_sigma = log(mod1$sigma),
+  logit_zprob = qlogis(mod1$zprob),
+  logit_rho_angle = qlogis(mod1$rho),
   log_tau_sq = log(0.1^2),
   log_kappa_sq = log(10^2),
   w = rep(0, nrow(spde$c0))
@@ -473,7 +477,7 @@ dat <- list(
   c0 = spde$c0,
   g1 = spde$g1,
   g2 = spde$g2,
-  bw = 10
+  bw = 15
 )
 
 t1 <- Sys.time()
@@ -495,6 +499,7 @@ rho_angle <- mod_sp2$rho_angle
 
 
 # pdf("./figs/lions_statedep.pdf", width = 7, height = 3.5)
+
 par(mfrow = c(1,2), mar = c(5,4,4,2)+0.1, xpd = FALSE)
 
 hist(data$step, prob = TRUE, bor = "white", breaks = 100,
@@ -505,6 +510,9 @@ for(j in 1:2) {
 }
 curve(delta[1] * dgamma2(x, mu[1], sigma[1])+
         delta[2] * dgamma2(x, mu[2], sigma[2]), add = TRUE, lwd = 2, lty = 2, n = 1000)
+
+legend("topright", col = c("orange", "deepskyblue", "black"), lty = c(1,1,2), lwd = 2,
+       legend = c("State 1", "State 2", "Marginal"), bty = "n")
 
 hist(data$angle, prob = TRUE, bor = "white",
      breaks = seq(-pi, pi, length = 30),
@@ -558,32 +566,7 @@ text(legend_x[2] + 0.02 * diff(usr[1:2]),
      labels = legend_values,
      adj = 0,
      cex = 0.9)
-
 # dev.off()
-
-
-# # Define gradient legend position
-# legend_x <- c(22.7, 23.7)  # X range for legend
-# legend_y <- c(-21.08, -21.05)  # Adjust above the plot
-#
-# # Create a color gradient
-# legend_colors <- as.raster(matrix(hcl.colors(100), nrow = 1))
-#
-# # Draw the gradient legend
-# rasterImage(legend_colors, legend_x[1], legend_y[1], legend_x[2], legend_y[2])
-#
-# # Add numerical labels
-# legend_values <- round(seq(min(g2), max(g2), length.out = 6), 1)
-# legend_positions <- seq(legend_x[1], legend_x[2], length.out = 6)
-# text(legend_positions, legend_y[2]+0.02, labels = legend_values, cex = 0.9)
-
-
-
-# idx <- which(mod_sp2$states == 1)
-# points(data$x, data$y,
-#        # col = "#00000015",
-#        col = scales::alpha("white", 0.1),
-#        pch = 16, cex = 0.2)
 
 
 # both fields
@@ -604,15 +587,14 @@ Sigma <- mod_sp2$sdr$cov.fixed
 B <- 1000
 thetas <- mvtnorm::rmvnorm(B, mod_sp2$sdr$par.fixed, Sigma)
 betas <- array(dim = c(2, 7, B))
-for(i in 1:B) {
-  betas[,,i] <- matrix(thetas[i,1:14], 2, 7)
-}
+for(i in 1:B) betas[,,i] <- matrix(thetas[i,1:14], 2, 7)
 
-tseq <- seq(0, 24, length = 100)
+tseq <- seq(0, 24, length = 200)
 Deltas <- array(dim = c(length(tseq), 2, B))
 Delta <- matrix(NA, length(tseq), 2)
 
 for(t in seq_along(tseq)) {
+  print(t)
   ts <- tseq[t] + 0:23
   ts <- ts %% 24
   Z <- cosinor(ts, period = c(24,12,6))
@@ -624,13 +606,38 @@ for(t in seq_along(tseq)) {
 }
 Delta_q <- apply(Deltas, 1:2, quantile, probs = c(0.025, 0.975))
 
+
+# pdf("./figs/lions_pstationary.pdf", width = 6, height = 4)
+
 par(mfrow = c(1,1))
 plot(tseq, Delta[,2], type = "l", lwd = 3,
-     ylim = c(0,1), col = color[2], bty = "n",
+     ylim = c(0,0.8), col = color[2], bty = "n",
      ylab = "Pr(active)", xlab = "Time of day", xaxt = "n")
 polygon(c(tseq, rev(tseq)), c(Delta_q[1, ,2], rev(Delta_q[2, ,2])),
         col = scales::alpha(color[2], 0.25), border = NA)
 axis(1, at = seq(0, 24, by = 6), labels = seq(0, 24, by = 6))
+
+# dev.off()
+
+
+pdf("./figs/lions_pstationary.pdf", width = 6, height = 4)
+
+par(mfrow = c(1,1))
+plot(NA, bty = "n", ylim = c(0,0.8), xlim = c(0,24), ylab = "Pr(active)", xlab = "Time of day", xaxt = "n")
+for(t in 0:47){
+  polygon(x = c(t/2, (t+1)/2, (t+1)/2, t/2), y = c(-0.03, -0.03, 0, 0), col = sun_cycle_colors[t+1], border = sun_cycle_colors[t+1])
+}
+polygon(x = c(0, 6.5, 6.5, 0), y = c(0.01, 0.01, 0.8, 0.8), col = "gray90", border = FALSE)
+polygon(x = c(18.5, 24, 24, 18.5), y = c(0.01, 0.01, 0.8, 0.8), col = "gray90", border = FALSE)
+
+polygon(c(tseq, rev(tseq)), c(Delta_q[1, ,2], rev(Delta_q[2, ,2])),
+        col = alpha("black", 0.25), border = FALSE)
+lines(tseq, Delta[,2], lwd = 3, col = alpha("black", 0.7))
+# lines(tseq[-ind], Delta[-ind,2], lwd = 2, col = alpha("black", 0.5))
+
+axis(1, at = seq(0, 24, by = 4), labels = seq(0, 24, by = 4))
+
+dev.off()
 
 
 
