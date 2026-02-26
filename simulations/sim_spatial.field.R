@@ -16,13 +16,14 @@ true_par <- list(
   beta0 = rep(-2, 2)
 )
 
+# Plot state-dependent distributions
 curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 8), ylim = c(0,1),
-      n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 2, col = color[1])
+      n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 3, col = color[1])
 curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500,
-      lwd = 2, col = color[2])
+      lwd = 3, col = color[2])
 
 
-sim_data <- function(n, kappa_pull = 0.3, p = true_par) {
+sim_data <- function(n, p = true_par, kappa_pull = 0.3) {
   s <- rep(NA, n)
   s[1] <- sample(1:2, size = 1, prob = p$delta) # first state
   loc <- matrix(0, n, 2) # initialise location matrix
