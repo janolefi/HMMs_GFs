@@ -6,6 +6,7 @@ r <- function(d, omega = 0.98, kappa = 5) {
 
 pdf("./figs/osc_cov.pdf", width = 7, height = 4)
 par(mfrow = c(1,1))
-curve(r(x, 0.98, 7), xlim = c(0, 10), lwd = 2, n = 1000,
-      bty = "n", xlab = "d = |u - v|", ylab = "r(u, v)")
+curve(r(x, 0.98, 7), xlim = c(0, 10), lwd = 3, n = 1000,
+      bty = "n", xlab = "d = |u - v|", ylab = "r(u, v)",
+      col = "deepskyblue")
 dev.off()
