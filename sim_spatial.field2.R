@@ -1,7 +1,6 @@
-library(LaMa)
-library(RTMBdist)
-library(fmesher)
 library(parallel)
+
+color = c("orange", "deepskyblue")
 
 
 # True spatial function for mean step length
@@ -9,6 +8,7 @@ true_field <- function(x,y){
   2 * (sin(2*pi*x/40) + cos(2*pi*y/40))
 }
 
+# True parameter used for simulation
 true_par <- list(
   delta = c(0.5, 0.5),
   mu = c(0.2, 5),
@@ -16,9 +16,10 @@ true_par <- list(
   beta0 = rep(-2, 2)
 )
 
-curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 8), n = 500,
-      bty = "n", ylab = "Density", xlab = "Step length")
-curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500)
+curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 8), ylim = c(0,1),
+      n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 2, col = color[1])
+curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500,
+      lwd = 2, col = color[2])
 
 
 sim_data <- function(n, kappa_pull = 0.3, p = true_par) {
@@ -54,6 +55,8 @@ one_rep <- function(dummy,
                     nObs = 5000,
                     par = true_par,
                     bw = 5) {
+  set.seed(dummy) # for reproducibility of each iteration
+
   library(LaMa)
   library(RTMBdist) # loads RTMB
 
@@ -169,6 +172,7 @@ one_rep <- function(dummy,
   ret$mse1 <- mse1
   ret$mse2 <- mse2
 
+  # convergence information
   ret$opt_convergence <- opt$convergence
   ret$opt_msg <- opt$message
 
@@ -189,10 +193,11 @@ one_rep_safe <- function(dummy, ...){
   )
 }
 
-set.seed(1234)
-
 res <- mclapply(1:2, one_rep_safe,
                 nObs = 10000,
                 par = true_par,
                 bw = 5,
                 mc.cores = 2)
+
+nm <- paste0("./simulations/results/results_bw", bw, "_nObs", nObs, ".rda")
+saveRDS(res, nm)
