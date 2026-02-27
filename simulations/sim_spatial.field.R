@@ -1,6 +1,7 @@
 library(parallel)
+library(RTMBdist)
 
-color = c("orange", "deepskyblue")
+color <- c("orange", "deepskyblue")
 
 
 # True spatial function for mean step length
@@ -13,11 +14,11 @@ true_par <- list(
   delta = c(0.5, 0.5),
   mu = c(0.2, 5),
   sigma = c(0.5, 3),
-  beta0 = rep(-2, 2)
+  beta0 = c(-2, -2)
 )
 
 # Plot state-dependent distributions
-curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 8), ylim = c(0,1),
+curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 10), ylim = c(0,1),
       n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 3, col = color[1])
 curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500,
       lwd = 3, col = color[2])
@@ -194,11 +195,59 @@ one_rep_safe <- function(dummy, ...){
   )
 }
 
-res <- mclapply(1:2, one_rep_safe,
-                nObs = 10000,
-                par = true_par,
-                bw = 5,
-                mc.cores = 2)
+# Run simulation
+nCores <- 4
+nSim <- 100
 
-nm <- paste0("./simulations/results/results_bw", bw, "_nObs", nObs, ".rda")
-saveRDS(res, nm)
+nObs <- 10000
+bws <- c(2, 5, 10, 15)
+
+
+for(bw in bws) {
+  cat("Bandwidth:", bw, "\n")
+
+  res <- mclapply(1:nSim, one_rep_safe,
+                  nObs = nObs,
+                  par = true_par,
+                  bw = bw,
+                  mc.cores = nCores) # number of cores to parallelise on
+
+  # Save results
+  nm <- paste0("./simulations/results/results_bw", bw, "_nObs", nObs, ".rds")
+  saveRDS(res, nm)
+
+  gc()
+}
+
+
+
+# Results -----------------------------------------------------------------
+
+nObs <- c(5000, 10000)
+bws <- c(2, 5, 10, 15)
+
+mus <- sigmas <- betas <- array(dim = c(nSim, 2, 4, 2))
+taus <- kappas <- array(dim = c(nSim, 4, 2))
+cor1s <- array(dim = c(nSim, 4, 2))
+
+for(i in 1:2) {
+  for(j in 1:4) {
+    n <- nObs[i]
+    bw <- bws[j]
+    nm <- paste0("./simulations/results/results_bw", bw, "_nObs", n, ".rds")
+    res <- readRDS(nm)
+
+    mus[,,j,i] <- t(sapply(res, function(r) r$mu))
+    sigmas[,,j,i] <- t(sapply(res, function(r) r$sigma))
+    betas[,,j,i] <- t(sapply(res, function(r) r$beta0))
+    taus[,j,i] <- sapply(res, function(r) r$tau)
+    kappas[,j,i] <- sapply(res, function(r) r$kappa)
+    cor1s[,j,i] <- sapply(res, function(r) r$cor1)
+  }
+}
+
+i = 2
+par(mfrow = c(1,4))
+for(j in 1:4) {
+  boxplot(cor1s[,j,i])
+}
