@@ -102,11 +102,11 @@ jnll <- function(par) {
 loc <- cbind(data$x, data$y)  # Spatial coordinates
 bnd1 <- fm_nonconvex_hull(loc, convex = -0.025)
 bnd2 <- fm_nonconvex_hull(loc, convex = -0.2)
-mesh <- fm_mesh_2d(
+mesh <- fmesher::fm_mesh_2d(
   loc=loc,
   boundary=list(bnd1, bnd2),
-  max.edge=c(10, 50),
-  cutoff=2,
+  max.edge=c(5, 50),
+  cutoff=1,
   plot.delay=0.5
 )
 # plot(mesh)
@@ -119,7 +119,7 @@ dat <- list(
   step = data$step,
   X = X,
   c0 = spde$c0, g1 = spde$g1, g2 = spde$g2,
-  bw = 5
+  bw = 15
 )
 
 range <- max(dist(loc)) / 5
@@ -158,33 +158,61 @@ g <- plogis(true_par$beta0[1] + z)
 g1 <- plogis(true_par$beta0[1] + z1)
 g2 <- plogis(true_par$beta0[1] + z2)
 
-grange <- range(c(g, g1, g2), na.rm = TRUE)
 
-par(mfrow = c(1,3))
+# pdf("./figs/sim_spatial_field.pdf", width = 8, height = 3.78)
+
+# grange <- range(c(g, g1, g2), na.rm = TRUE)
+grange <- c(0, 1)
+cols <- viridis(100)
+
+layout(matrix(c(1,1,1,
+                2,3,4),
+              nrow = 2, byrow = TRUE),
+       heights = c(1, 5))
+
+## --- Legend (top row) ---
+par(mar = c(2,4,2,4))
+
+z <- matrix(seq(grange[1], grange[2], length.out = 100), ncol = 1)
+
+image(x = seq(grange[1], grange[2], length.out = 100),
+      y = 1,
+      z = z,
+      col = cols,
+      axes = FALSE,
+      xlab = "", ylab = "",
+      useRaster = TRUE)
+
+axis(1)
+# box()
+
+## --- Panels ---
+par(mar = c(5,4,3.5,2))
+
 image(x_seq, y_seq, g,
       xlab = "x", ylab = "y",
-      col = viridis(100),
-      zlim = grange,
-      main = "True spatial field", asp = 1, bty = "n")
-plot(st_geometry(bnd1), add = TRUE, border = "white", lty = 3)
+      col = cols, zlim = grange,
+      main = expression(gamma[21]),
+      asp = 1, bty = "n",
+      useRaster = TRUE)
+plot(st_geometry(bnd1), add = TRUE, border = "white", lty = 1)
 
 image(x_seq, y_seq, g1,
       xlab = "x", ylab = "y",
-      col = viridis(100),
-      zlim = grange,
-      main = "True spatial field", asp = 1, bty = "n")
-plot(st_geometry(bnd1), add = TRUE, border = "white", lty = 3)
+      col = cols, zlim = grange,
+      main = expression(hat(gamma)[21]),
+      asp = 1, bty = "n",
+      useRaster = TRUE)
+plot(st_geometry(bnd1), add = TRUE, border = "white", lty = 1)
 
 image(x_seq, y_seq, g2,
       xlab = "x", ylab = "y",
-      col = viridis(100),
-      zlim = grange,
-      main = "True spatial field", asp = 1, bty = "n")
-plot(st_geometry(bnd1), add = TRUE, border = "white", lty = 3)
+      col = cols, zlim = grange,
+      main = expression(hat(gamma)[12]),
+      asp = 1, bty = "n",
+      useRaster = TRUE)
+plot(st_geometry(bnd1), add = TRUE, border = "white", lty = 1)
+points(data$x, data$y, pch = 16, cex = 0.2, col = alpha("white", 0.2))
 
-
-g_inside <- as.numeric(g)[inside]
-g1_inside <- as.numeric(g1)[inside]
-
-cor(g_inside, g1_inside)
+# dev.off()
 
