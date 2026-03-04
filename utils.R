@@ -5,6 +5,9 @@ rgmrf <- function(n, mean = 0, Q) {
   t(samples)
 }
 
+cbPal <- c("#E69F00", "#56B4E9", "#009E73","#CC79A7", "#F0E442", "#0072B2", "#D55E00")
+
+
 sun_cycle_colors <- c(
   "#0b0d3e",  # 00:00 - Midnight (Night)
   "#0d1046",  # 00:30
