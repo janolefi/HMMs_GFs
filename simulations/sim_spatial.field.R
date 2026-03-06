@@ -256,6 +256,7 @@ nObs <- 10000
 bws <- c(2, 5, 10, 15)
 
 # parallelise over data sets
+# remove commenting to run
 # res <- mclapply(1:nSim, one_rep,
 #                 bws = bws,
 #                 nObs = nObs,
