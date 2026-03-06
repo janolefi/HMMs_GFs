@@ -256,11 +256,11 @@ nObs <- 10000
 bws <- c(2, 5, 10, 15)
 
 # parallelise over data sets
-res <- mclapply(1:nSim, one_rep,
-                bws = bws,
-                nObs = nObs,
-                par = true_par,
-                mc.cores = nCores) # number of cores to parallelise on
+# res <- mclapply(1:nSim, one_rep,
+#                 bws = bws,
+#                 nObs = nObs,
+#                 par = true_par,
+#                 mc.cores = nCores) # number of cores to parallelise on
 
 # Save results
 nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
