@@ -1,8 +1,7 @@
 library(parallel)
 library(RTMBdist)
 
-color <- c("orange", "deepskyblue")
-
+source("utils.R")
 
 # True spatial function for mean step length
 true_field <- function(x,y){
@@ -19,17 +18,18 @@ true_par <- list(
 
 # Plot state-dependent distributions
 curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 10), ylim = c(0,1),
-      n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 3, col = color[1])
+      n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 3, col = cbPal[1])
 curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500,
-      lwd = 3, col = color[2])
+      lwd = 3, col = cbPal[2])
 
-
-sim_data <- function(n, p = true_par, kappa_pull = 0.3) {
+# Function to simulate a data set
+sim_data <- function(n, p, kappa_pull = 0.3) {
   s <- rep(NA, n)
   s[1] <- sample(1:2, size = 1, prob = p$delta) # first state
   loc <- matrix(0, n, 2) # initialise location matrix
   step <- rep(NA, n) # initialise step length vector
   phi <- 0 # initialise absolute heading
+  field_val <- rep(NA, n)
   for(t in 1:(n-1)) {
     # simulate step
     step[t] <- rgamma2(1, p$mu[s[t]], p$sigma[s[t]])
@@ -44,42 +44,45 @@ sim_data <- function(n, p = true_par, kappa_pull = 0.3) {
     loc[t+1,2] <- loc[t,2] + step[t] * sin(phi)
     # tpm evalutated at next location
     eta <- p$beta0
-    eta[1] <- eta[1] + true_field(loc[t+1,1], loc[t+1,2])
+    field_val[t+1] <- true_field(loc[t+1,1], loc[t+1,2])
+    eta[1] <- eta[1] + field_val[t+1]
     Gamma <- tpm(eta)
     # print(Gamma[2,1])
     # sample next state based on that tpm
     s[t+1] <- sample(1:2, 1, prob = Gamma[s[t], ])
   }
-  data.frame(step = step, x = loc[,1], y = loc[,2], state = s)
+  data.frame(step = step, x = loc[,1], y = loc[,2], state = s, field_val = field_val)
 }
 
-one_rep <- function(dummy,
+# Simulate data set and fit model for given specification
+one_fit <- function(dummy,
                     nObs = 5000,
                     par = true_par,
-                    bw = 5) {
+                    bw = 10) {
   set.seed(dummy) # for reproducibility of each iteration
 
-  library(LaMa)
-  library(RTMBdist) # loads RTMB
+  library(LaMa) # also loads RTMB
+  library(RTMBdist)
 
   # Simulate data
-  data <- sim_data(nObs, p = par)
+  data <- sim_data(nObs, par)
 
-  # Make a prediction grid
-  x_seq <- seq(min(data$x), max(data$x), length.out = 512)
-  y_seq <- seq(min(data$y), max(data$y), length.out = 512)
-  grid_data <- expand.grid(x = x_seq, y = y_seq)
+  # Create a 512x512 prediction grid
+  x_grid <- seq(min(data$x), max(data$x), length.out = 512)
+  y_grid <- seq(min(data$y), max(data$y), length.out = 512)
+  grid_data <- expand.grid(x = x_grid, y = y_grid)
   grid <- as.matrix(grid_data)
-  z <- outer(x_seq, y_seq, true_field)
+  z21 <- outer(x_grid, y_grid, true_field)
 
+  # likelihood function
   jnll <- function(par) {
     getAll(par, dat, warn = FALSE)
 
     mu <- exp(log_mu); REPORT(mu)
     sigma <- exp(log_sigma); REPORT(sigma)
 
-    beta <- cbind(beta0, w); REPORT(w)
-    Gamma <- tpm_g(cbind(1, X), beta)
+    beta <- cbind(beta0, w)
+    Gamma <- tpm_g(X, beta)
     delta <- c(0.5, 0.5)
 
     lallprobs <- matrix(0, length(step), 2)
@@ -88,8 +91,10 @@ one_rep <- function(dummy,
       lallprobs[ind,j] <- dgamma2(step[ind], mu[j], sigma[j], log = TRUE)
     }
 
+    # HMM likelihood
     nll <- -forward_g(delta, Gamma, lallprobs, bw = bw, logspace = TRUE)
 
+    # GMRF likelihood
     tau_sq <- exp(log_tau_sq); tau <- sqrt(tau_sq); REPORT(tau)
     kappa_sq <- exp(log_kappa_sq); kappa <- sqrt(kappa_sq); REPORT(kappa)
     Q <- tau_sq * (kappa_sq*kappa_sq * c0 + 2 * kappa_sq * g1 + g2)
@@ -106,8 +111,8 @@ one_rep <- function(dummy,
   mesh <- fmesher::fm_mesh_2d(
     loc=loc,
     boundary=list(bnd1, bnd2),
-    max.edge=c(10, 50),
-    cutoff=2,
+    max.edge=c(5, 50),
+    cutoff=1,
     plot.delay=0.5
   )
   spde <- fmesher::fm_fem(mesh)
@@ -120,12 +125,14 @@ one_rep <- function(dummy,
     bw = bw
   )
 
+  # initial parameter list
   range <- max(dist(loc)) / 5
   kappa0 <- sqrt(8)/range
-  sigma0 <- 3
-  tau0 <- 1/(sigma0 * sqrt(4*pi) * kappa0)
+  sigma0 <- 3 # initial marginal variance of the field
+  tau0 <- 1 / (sigma0 * sqrt(4*pi) * kappa0)
 
-  par <- list(
+  # initialise with true values
+  par0 <- list(
     log_mu = log(par$mu),
     log_sigma = log(par$sigma),
     beta0 = par$beta0,
@@ -134,50 +141,83 @@ one_rep <- function(dummy,
     log_kappa_sq = log(kappa0^2)
   )
 
+  # fit model
   t1 <- Sys.time()
-  obj <- MakeADFun(jnll, par, random = "w")
+  obj <- MakeADFun(jnll, par0, random = "w")
   opt <- nlminb(obj$par, obj$fn, obj$gr)
   time <- Sys.time() - t1
 
   mod <- report(obj)
   mod$fitting_time <- time
+  mod$beta0 <- mod$beta[,1]
 
-  X_p <- fmesher::fm_basis(mesh, grid)
-  fields <- X_p %*% t(mod$w)
+  #### Compute quantities of interest ####
+  # linear predictors at observed locations
+  Eta <- as.matrix(cbind(1, X) %*% t(mod$beta))
+  eta21_est <- Eta[-1,1]
+  eta12_est <- Eta[-1,2]
+  eta21 <- par$beta0[1] + data$field_val[-1] # true linear predictor in simulation
+  eta21_diff <- mean(eta21_est - eta21) # mean difference
+  eta12_diff <- mean(eta12_est - par$beta0[2]) # mean difference
+
+  # linear predictors on grid
+  X_grid <- fmesher::fm_basis(mesh, grid)
+  Eta_grid <- as.matrix(cbind(1, X_grid) %*% t(mod$beta))
+  eta21_est_grid <- matrix(Eta_grid[,1], nrow = length(x_grid), ncol = length(y_grid))
+  eta12_est_grid <- matrix(Eta_grid[,2], nrow = length(x_grid), ncol = length(y_grid))
+  eta21_grid <- par$beta0[1] + z21
 
   # construct indicator which data points are inside bnd1
   locs_sf <- sf::st_as_sf(grid_data, coords = c("x", "y"), crs = sf::st_crs(bnd1))
   inside <- sf::st_within(locs_sf, bnd1, sparse = FALSE)[,1]
 
-  z1 <- matrix(fields[,1], nrow = length(x_seq), ncol = length(y_seq))
-  z2 <- matrix(fields[,2], nrow = length(x_seq), ncol = length(y_seq))
+  # only those inside non-convex hull
+  eta21_inside <- as.numeric(eta21_grid)[inside]
+  eta21_est_inside <- as.numeric(eta21_est_grid)[inside]
+  eta12_est_inside <- as.numeric(eta12_est_grid)[inside]
 
-  g <- plogis(true_par$beta0[1] + z)
-  g1 <- plogis(true_par$beta0[1] + z1)
-  g2 <- plogis(true_par$beta0[2] + z2)
+  # transform from logit scale to transition probability scale
+  g21_grid <- plogis(eta21_grid)
+  g21_est_grid <- plogis(eta21_est_grid)
+  g12_est_grid <- plogis(eta12_est_grid)
+  g21_inside <- plogis(eta21_inside)
+  g21_est_inside <- plogis(eta21_est_inside)
+  g12_est_inside <- plogis(eta12_est_inside)
 
-  g_inside <- as.numeric(g)[inside]
-  g1_inside <- as.numeric(g1)[inside]
-  g2_inside <- as.numeric(g2)[inside]
+  # compute correlation and MSE inside non-convex hull
+  cor21 <- cor(eta21_inside, eta21_est_inside)
+  cor21_g <- cor(g21_inside, g21_est_inside)
+  me21 <- mean(eta21_est_inside - eta21_inside)
+  me21_g <- mean(g21_est_inside - g21_inside)
+  mse21 <- mean((eta21_est_inside - eta21_inside)^2)
+  mse21_g <- mean((g21_est_inside - g21_inside)^2)
+  me12 <- mean(eta12_est_inside - par$beta[2])
+  me12_g <- mean(g12_est_inside - plogis(par$beta[2]))
+  mse12 <- mean((eta12_est_inside - par$beta[2])^2)
+  mse12_g <- mean((g12_est_inside - plogis(par$beta[2]))^2)
 
-  cor1 <- cor(g_inside, g1_inside)
-
-  mse1 <- mean((g_inside - g1_inside)^2)
-  mse2 <- mean((0 - g2_inside)^2)
-
-  mod$beta0 <- mod$beta[,1]
+  # construct return object
   ret <- mod[c("mu", "sigma", "beta0",
                "tau", "kappa",
                "fitting_time")]
-
-  ret$cor1 <- cor1
-  ret$mse1 <- mse1
-  ret$mse2 <- mse2
+  ret$eta21_diff <- eta21_diff
+  ret$eta12_diff <- eta12_diff
+  ret$cor21 <- cor21
+  ret$cor21_g <- cor21_g
+  ret$me21 <- me21
+  ret$me21_g <- me21_g
+  ret$mse21 <- mse21
+  ret$mse21_g <- mse21_g
+  ret$me12 <- me12
+  ret$me12_g <- me12_g
+  ret$mse12 <- mse12
+  ret$mse12_g <- mse12_g
 
   # convergence information
   ret$opt_convergence <- opt$convergence
   ret$opt_msg <- opt$message
 
+  # cleanup
   rm(obj)
   gc()
 
@@ -185,69 +225,256 @@ one_rep <- function(dummy,
 }
 
 # safe wrapper to avoid failing
-one_rep_safe <- function(dummy, ...){
+one_fit_safe <- function(dummy, ...){
   tryCatch(
-    one_rep(dummy, ...),
+    one_fit(dummy, ...),
     error = function(e) {
       message("Error in one_fit: ", conditionMessage(e))
-      return(NULL)
+      return("failed")
     }
   )
 }
 
+# call one_fit in a loop over bws for the same data set
+one_rep <- function(dummy, bws, ...) {
+  res <- list()
+  # loop over bws for same dummy -> same data set
+  for(bw in bws) {
+    nm <- paste0("bw", bw)
+    res[[nm]] <- one_fit_safe(dummy, bw = bw, ...)
+  }
+  return(res)
+}
+
+
+
 # Run simulation
-nCores <- 4
-nSim <- 100
+nCores <- 3 # number of cores to use
+nSim <- 200 # number of data sets to simulate
 
 nObs <- 10000
 bws <- c(2, 5, 10, 15)
 
+# parallelise over data sets
+res <- mclapply(1:nSim, one_rep,
+                bws = bws,
+                nObs = nObs,
+                par = true_par,
+                mc.cores = nCores) # number of cores to parallelise on
 
-for(bw in bws) {
-  cat("Bandwidth:", bw, "\n")
+# Save results
+nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
+saveRDS(res, nm)
 
-  res <- mclapply(1:nSim, one_rep_safe,
-                  nObs = nObs,
-                  par = true_par,
-                  bw = bw,
-                  mc.cores = nCores) # number of cores to parallelise on
+gc() # global cleanup
 
-  # Save results
-  nm <- paste0("./simulations/results/results_bw", bw, "_nObs", nObs, ".rds")
-  saveRDS(res, nm)
-
-  gc()
-}
 
 
 
 # Results -----------------------------------------------------------------
 
-nObs <- c(5000, 10000)
-bws <- c(2, 5, 10, 15)
+# lood results
+nSim <- 200
+nObs <- 10000
+nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
+res <- readRDS(nm)
 
-mus <- sigmas <- betas <- array(dim = c(nSim, 2, 4, 2))
-taus <- kappas <- array(dim = c(nSim, 4, 2))
-cor1s <- array(dim = c(nSim, 4, 2))
-
-for(i in 1:2) {
-  for(j in 1:4) {
-    n <- nObs[i]
-    bw <- bws[j]
-    nm <- paste0("./simulations/results/results_bw", bw, "_nObs", n, ".rds")
-    res <- readRDS(nm)
-
-    mus[,,j,i] <- t(sapply(res, function(r) r$mu))
-    sigmas[,,j,i] <- t(sapply(res, function(r) r$sigma))
-    betas[,,j,i] <- t(sapply(res, function(r) r$beta0))
-    taus[,j,i] <- sapply(res, function(r) r$tau)
-    kappas[,j,i] <- sapply(res, function(r) r$kappa)
-    cor1s[,j,i] <- sapply(res, function(r) r$cor1)
-  }
+results <- data.frame(bw = rep(bws, each = nSim))
+bwvec <- rep(bws, each = nSim)
+for(bw in c(2, 5, 10, 15)) {
+  bwnm <- paste0("bw", bw)
+  idx <- bwvec == bw
+  results$eta12_diff[idx] <- sapply(res, function(r) r[[bwnm]]$eta12_diff)
+  results$eta21_diff[idx] <- sapply(res, function(r) r[[bwnm]]$eta21_diff)
+  results$beta0_21[idx] <- sapply(res, function(r) r[[bwnm]]$beta0[1])
+  results$beta0_12[idx] <- sapply(res, function(r) r[[bwnm]]$beta0[2])
+  results$cor21[idx] <- sapply(res, function(r) r[[bwnm]]$cor21)
+  results$cor21_g[idx] <- sapply(res, function(r) r[[bwnm]]$cor21_g)
+  results$me21[idx] <- sapply(res, function(r) r[[bwnm]]$me21)
+  results$me21_g[idx] <- sapply(res, function(r) r[[bwnm]]$me21_g)
+  results$mse21[idx] <- sapply(res, function(r) r[[bwnm]]$mse21)
+  results$mse21_g[idx] <- sapply(res, function(r) r[[bwnm]]$mse21_g)
+  results$me12[idx] <- sapply(res, function(r) r[[bwnm]]$me12)
+  results$me12_g[idx] <- sapply(res, function(r) r[[bwnm]]$me12_g)
+  results$mse12[idx] <- sapply(res, function(r) r[[bwnm]]$mse12)
+  results$mse12_g[idx] <- sapply(res, function(r) r[[bwnm]]$mse12_g)
+  results$mu1[idx] <- sapply(res, function(r) r[[bwnm]]$mu[1])
+  results$mu2[idx] <- sapply(res, function(r) r[[bwnm]]$mu[2])
+  results$sigma1[idx] <- sapply(res, function(r) r[[bwnm]]$sigma[1])
+  results$sigma2[idx] <- sapply(res, function(r) r[[bwnm]]$sigma[2])
 }
 
-i = 2
-par(mfrow = c(1,4))
-for(j in 1:4) {
-  boxplot(cor1s[,j,i])
-}
+results_5000 <- results
+results_5000$nObs  <- 5000
+
+results_10000 <- results
+results_10000$nObs <- 10000
+
+res_all <- rbind(results_5000, results_10000)
+
+
+# compute ROOT mean squared error
+res_all$rmse21_g <- sqrt(res_all$mse21_g)
+res_all$rmse12_g <- sqrt(res_all$mse12_g)
+
+res_all$rmse21 <- sqrt(res_all$mse21)
+res_all$rmse12 <- sqrt(res_all$mse12)
+
+
+
+# Visualise results -------------------------------------------------------
+
+library(tidyr)
+library(dplyr)
+library(patchwork)
+library(ggplot2)
+
+
+source("utils.R") # color palette
+col_vio <- c("2" = cbPal[1], "5" = cbPal[2], "10" = cbPal[3], "15" = cbPal[4])
+
+# pivot to long
+res_long <- res_all %>%
+  pivot_longer(
+    cols = colnames(res_all)[-c(1, 20)],
+    names_to = "parameter",
+    values_to = "value"
+  )
+
+
+
+##### Plot for eta_12 and eta_21 #####
+
+eta12 <- ggplot(res_all, aes(x = factor(bw), y = eta12_diff, fill = factor(bw))) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  facet_wrap(~ nObs, nrow = 1) +
+  theme_light() +
+  labs(x = "", y = expression(hat(eta)[12] - eta[12]), fill = "Bandwidth") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_manual(values = col_vio)
+
+eta21 <- ggplot(res_all, aes(x = factor(bw), y = eta21_diff, fill = factor(bw))) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  facet_wrap(~ nObs, nrow = 1) +
+  theme_light() +
+  labs(x = "Bandwidth", y = expression(hat(eta)[21] - eta[21]),
+       fill = "Bandwidth")+
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_manual(values = col_vio)
+
+# pdf("./figs/sim_eta.pdf", width = 8, height = 4)
+(eta12 / eta21) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+# dev.off()
+
+
+
+
+##### Plot for correlation and MSE #####
+
+cor21 <- ggplot(res_all, aes(x = factor(bw), y = cor21_g, fill = factor(bw))) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  facet_wrap(~ nObs, nrow = 1) +
+  theme_light() +
+  labs(x = "", y = expression(Cor(gamma[21], hat(gamma)[21])),
+       fill = "Bandwidth")+
+  scale_fill_manual(values = col_vio)
+
+rmse21 <- ggplot(res_all, aes(x = factor(bw), y = rmse21_g, fill = factor(bw))) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  facet_wrap(~ nObs, nrow = 1) +
+  theme_light() +
+  labs(x = "Bandwidth", y = expression(RMSE(hat(gamma)[21])),
+       fill = "Bandwidth")+
+  scale_fill_manual(values = col_vio)
+
+rmse12 <- ggplot(res_all, aes(x = factor(bw), y = rmse12_g, fill = factor(bw))) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  facet_wrap(~ nObs, nrow = 1) +
+  theme_light() +
+  labs(x = "", y = expression(RMSE(hat(gamma)[12])),
+       fill = "Bandwidth")+
+  scale_fill_manual(values = col_vio)
+
+
+# pdf("./figs/sim_cor_rmse.pdf", width = 8, height = 6)
+(cor21 / rmse12 / rmse21) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+# dev.off()
+
+
+
+##### Plot for mu and sigma #####
+
+mu_long <- res_all %>%
+  select(bw, nObs, mu1, mu2) %>%
+  pivot_longer(cols = c(mu1, mu2),
+               names_to = "state",
+               values_to = "value")
+mu_long$state <- recode(mu_long$state, mu1 = "mu[1]", mu2 = "mu[2]")
+true_mu <- data.frame(
+  state = c("mu[1]", "mu[1]", "mu[2]", "mu[2]"),
+  nObs  = c(5000, 10000, 5000, 10000),
+  true  = c(0.2, 0.2, 5, 5)
+)
+
+mu_plot <- ggplot(mu_long, aes(x = factor(bw), y = value, fill = factor(bw))) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  facet_grid(state ~ nObs,
+             scales = "free_y",
+             labeller = labeller(state = label_parsed)) +
+  geom_hline(data = true_mu,
+             aes(yintercept = true),
+             linetype = "dashed",
+             inherit.aes = FALSE) +
+  theme_light() +
+  labs(x = "",
+       y = expression(mu),
+       fill = "Bandwidth") +
+  scale_fill_manual(values = col_vio)
+
+
+sigma_long <- res_all %>%
+  select(bw, nObs, sigma1, sigma2) %>%
+  pivot_longer(cols = c(sigma1, sigma2),
+               names_to = "state",
+               values_to = "value")
+sigma_long$state <- recode(sigma_long$state, sigma1 = "sigma[1]", sigma2 = "sigma[2]")
+
+
+true_sigma <- data.frame(
+  state = c("sigma[1]", "sigma[1]", "sigma[2]", "sigma[2]"),
+  nObs  = c(5000, 10000, 5000, 10000),
+  true  = c(0.5,0.5, 3,3)
+)
+
+sigma_plot <- ggplot(sigma_long, aes(x = factor(bw), y = value, fill = factor(bw))) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_boxplot(width = 0.12, outlier.size = 0.5, show.legend = FALSE) +
+  facet_grid(state ~ nObs,
+             scales = "free_y",
+             labeller = labeller(state = label_parsed)) +
+  geom_hline(data = true_sigma,
+             aes(yintercept = true),
+             linetype = "dashed",
+             inherit.aes = FALSE) +
+  theme_light() +
+  labs(x = "Bandwidth",
+       y = expression(sigma),
+       fill = "Bandwidth") +
+  scale_fill_manual(values = col_vio)
+
+# pdf("./figs/sim_mu_sigma.pdf", width = 8, height = 6)
+(mu_plot / sigma_plot) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+# dev.off()
+
