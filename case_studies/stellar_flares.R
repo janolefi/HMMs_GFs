@@ -184,7 +184,7 @@ dat <- list(
   y = data$y,
   spde1 = spde1,
   spde2 = spde2,
-  bw = 15,
+  bw = 20,
   trackID = data$trackID,
   trackInd = calc_trackInd(data$trackID)
 )
@@ -197,21 +197,27 @@ system.time(
 )
 Sys.time() - t1
 
-mod <- obj$report()
+mod <- report(obj)
 mod$kappa
 mod$tau
 mod$omega
 
 states <- viterbi(mod = mod)
 stateprobs <- stateprobs(mod = mod)
-flare <- states != 1
+flare <- states == 2
+flare_event <- states != 1
+rle_f <- rle(flare_event)
+rle_f$lengths[1:18*2] # lengths
+round(mean(rle_f$lengths[1:18*2]) * 2, 1) # on average 17.4 minutes
 
+rle(flare)
+# 18 flaring events in total
 
 ### Plot result
 # choose what to plot here
 idx <- 7030:7350
 
-pdf("./figs/flare_result.pdf", width = 7, height = 4.5)
+# pdf("./figs/flare_result.pdf", width = 7, height = 4.5)
 
 # Stacked barplot of state probabilities
 layout(matrix(1:2, ncol = 1), heights = c(0.6, 1))
@@ -236,7 +242,34 @@ legend(x = 1335.415, y = 190,
        lwd = c(rep(NA, 3), 3),
        col = c(color, "plum"), bty = "n")
 
-dev.off()
+# dev.off()
+
+
+# plot full time series
+ch <- calc_trackInd(data$trackID)[2]
+
+# pdf("./figs/flare_result_full.pdf", width = 8, height = 4)
+
+# Decoded time series
+par(mfrow = c(1,1), mar = c(5, 4, 0.5, 2))
+plot(data$time, data$y, col = color[states], pch = 16, cex = 0.6,
+     xlab = "Time (days)", ylab = "Flux", bty = "n", ylim = c(-30, 160))
+# abline(v = data$time[ch], col = "darkblue", lwd = 2, lty = 2)
+lines(data$time[1:(ch-1)], mod$f[1:(ch-1)], lwd = 1.5, col = "plum")
+lines(data$time[ch:nrow(data)], mod$f[ch:nrow(data)], lwd = 1.5, col = "plum")
+
+rect(data$time[idx[1]-10], -30, data$time[idx[length(idx)]+10], 160,
+     lty = 2, border = "gray")
+
+# legend
+legend("topright",
+       legend = c("Quiet", "Firing", "Decaying", "Trend"),
+       pch = c(rep(16, 3), NA),
+       lwd = c(rep(NA, 3), 1.5),
+       cex = 0.8, bty = "n",
+       col = c(color, "plum"), box.col = "gray")
+
+# dev.off()
 
 
 
