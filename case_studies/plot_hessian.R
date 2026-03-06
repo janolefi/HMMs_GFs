@@ -105,11 +105,19 @@ H_banded <- obj_banded$env$spHess(random = TRUE)
 idx <- 1:60
 
 # left panel
-pdf("./figs/denseH.pdf", width = 5, height = 5)
+# pdf("./figs/denseH.pdf", width = 5, height = 5)
 SparseM::image(H_dense[idx, idx])
 dev.off()
 
 # right panel
-pdf("./figs/bandedH.pdf", width = 5, height = 5)
+# pdf("./figs/bandedH.pdf", width = 5, height = 5)
 SparseM::image(H_banded[idx, idx])
 dev.off()
+
+H_dense <- as.matrix(H_dense)
+Vals <- matrix(NA, 50, 10)
+for(i in 1:50) {
+  Vals[i,] <- H_dense[i,i+1:10]
+}
+aVals <- abs(Vals)
+plot(log(colMeans(aVals)))
