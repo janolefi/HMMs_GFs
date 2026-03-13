@@ -20,6 +20,9 @@ color <- c("#00000070", "red", "orange")
 TapeConfig(matmul = "plain")
 
 
+
+# Data and preprocessing --------------------------------------------------
+
 ### Loading data
 # Brightness measurements of TESS2018206045859 at 2 min cadence
 data <- read.csv("./data/tess2018206045859-s0001-0000000031381302-0120-s_lc.csv")[,c("TIME","PDCSAP_FLUX")]
@@ -44,13 +47,15 @@ data$trackID[1:end_before_gap] <- 1
 data$y <- scale(data$y, scale = FALSE)
 
 
-# Creating 2 meshs and respective finite element matrices for the  --------
+
+# Creating meshs and finite element matrices ------------------------------
 
 mesh1 <- fm_mesh_1d(data$time[data$trackID == 1])
 spde1 <- fm_fem(mesh1)
 
 mesh2 <- fm_mesh_1d(data$time[data$trackID == 2])
 spde2 <- fm_fem(mesh2)
+
 
 
 # Simple model without state switching ------------------------------------
@@ -263,6 +268,7 @@ rle(flare)
 # 18 flaring events in total
 
 
+
 # Plot result - main figure from the paper --------------------------------
 
 # Choose which section to plot here
@@ -295,6 +301,7 @@ legend(x = 1335.415, y = 190,
        col = c(color, "plum"), bty = "n")
 
 # dev.off()
+
 
 
 # Plot full time series (Appendix) ----------------------------------------
