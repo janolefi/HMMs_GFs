@@ -1,9 +1,17 @@
-rgmrf <- function(n, mean = 0, Q) {
-  if(length(mean) == 1) mean <- rep(mean, nrow(Q))
-  samples <- RTMB:::rgmrf0(n, Q)
-  samples <- samples + mean
-  t(samples)
-}
+# rgmrf <- function(n, mean = 0, Q) {
+#   if(length(mean) == 1) mean <- rep(mean, nrow(Q))
+#   samples <- RTMB:::rgmrf0(n, Q)
+#   samples <- samples + mean
+#   t(samples)
+# }
+# rgmrf <- function(n, mean = 0, Q) {
+#   d <- nrow(Q)
+#   if (length(mean) == 1) mean <- rep(mean, d)
+#   stopifnot(length(mean) == d)
+#   samples <- RTMB:::rgmrf0(n, Q)
+#   samples <- samples + mean
+#   t(samples)
+# }
 
 cbPal <- c("#E69F00", "#56B4E9", "#009E73","#CC79A7", "#F0E442", "#0072B2", "#D55E00")
 
