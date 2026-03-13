@@ -14,7 +14,7 @@ approach](https://academic.oup.com/jrsssb/article-abstract/73/4/423/7034732).
 The main methodological development is a *banded* forward algorithm,
 available through the `R` package
 [`LaMa`](https://janolefi.github.io/LaMa/) and its
-[`forward()`](https://janolefi.github.io/LaMa/reference/forward.html?q=forward#null)
+[`forward()`](https://janolefi.github.io/LaMa/reference/forward.html)
 function.
 
 Code to reproduce the case studies can be found in the `case_studies`
