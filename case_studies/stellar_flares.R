@@ -247,9 +247,9 @@ mod$omega
 
 # Sampling from posterior distribution for uncertainty
 par_samples <- MCreport(obj)
-f_samples <- t(sapply(par_samples, function(p) c(p$w1,p$w2) + p$mu))
+f_samples <- t(sapply(par_samples, function(p) c(p$w1, p$w2) + p$mu))
 f_quantiles <- t(apply(f_samples, 2, quantile, probs = c(0.025, 0.975)))
-w_samples <- t(sapply(par_samples, function(p) c(p$w1,p$w2)))
+
 
 ### State decoding
 # Hard decoding: Viterbi algorithm
@@ -289,9 +289,11 @@ axis(2, at = c(0, 0.5, 1), labels = c(0, 0.5, 1))
 par(mar = c(5, 4, 0.5, 2), xpd = NA)
 plot(data$time[idx], data$y[idx], col = color[states[idx]], pch = 16,
      xlab = "Time (days)", ylab = "Flux", bty = "n")
-lines(data$time[idx], mod$f[idx], lwd = 3, col = "plum")
-lines(data$time[idx], f_quantiles[idx, 1], lwd = 1, col = "plum", lty = 3)
-lines(data$time[idx], f_quantiles[idx, 2], lwd = 1, col = "plum", lty = 3)
+# 95 % CI
+polygon(data$time[c(idx, rev(idx))],
+        c(f_quantiles[idx,1], f_quantiles[rev(idx),2]),
+        col = alpha("plum", 0.35), border = NA)
+lines(data$time[idx], mod$f[idx], lwd = 3, col = "plum") # line width is wider thatn CI
 
 # Legend
 legend(x = 1335.415, y = 190,
