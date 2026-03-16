@@ -1,24 +1,36 @@
-### installing dev version of packages
+####### Case study - lions in Kalahari #######
+
+# installing required packages
+# install.packages(c("RTMB", "fmesher"))
+
 # devtools::install_github("janolefi/LaMa")
-# devtools::install_github("kaskr/RTMB", subdir = "RTMB")
 # devtools::install_github("janolefi/RTMBdist")
 
-library(LaMa)
-library(RTMBdist)
-library(fmesher)
-library(viridis)
-library(leaflet)
-library(scales)
+library(LaMa)       # for HMM functions
+library(RTMBdist)   # for ExGaussian distribution
+library(fmesher)    # for mesh and FEM matrices
+library(scales)     # for semi-transparent colors
+library(viridis)    # for field color palette
+library(leaflet)    # for satellite images
 
-color <- c("orange", "deepskyblue", "seagreen2")
 
-# lood lion GPS data
+### Colors for plotting
+source("utils.R")
+
+
+### Changing AD setting inside RTMB for faster calculations
+TapeConfig(matmul = "plain")
+
+
+# Data and satellite EDA --------------------------------------------------
+
+### Loading data
 data <- readRDS("./data/lions.rds")
 head(data)
 nrow(data)
 
 
-## plot data on satellite image
+### Plot data on satellite image
 # leaflet() %>%
 #   addProviderTiles(providers$Esri.WorldImagery) %>%
 #   fitBounds(lng1 = min(data$x, na.rm = TRUE),
@@ -31,30 +43,36 @@ nrow(data)
 #                    color = "#00000040")
 
 
-# Homogeneous model -------------------------------------------------------
 
+
+# Homogeneous 2-state model -----------------------------------------------
+
+# likelihood function
 nll0 <- function(par) {
-  getAll(par, dat)
+  getAll(par, dat) # unpacks lists
 
-  Gamma <- tpm(eta)
-  delta <- stationary(Gamma)
+  Gamma <- tpm(eta) # transition matrix from unconstrained (softmax)
+  delta <- stationary(Gamma) # stationary dist
 
+  # parameter transformations
   mu <- exp(log_mu); REPORT(mu)
   sigma <- exp(log_sigma); REPORT(sigma)
   zprob <- plogis(logit_zprob); REPORT(zprob)
   rho <- plogis(logit_rho); REPORT(rho); REPORT(mu_a)
 
+  # computing state-dependent densities
   allprobs <- matrix(1, length(step), N)
   ind <- which(!is.na(step) & !is.na(angle))
   for(j in 1:N) {
     allprobs[ind,j] <- dzigamma2(step[ind], mu[j], sigma[j], zprob[j]) *
       dwrpcauchy(angle[ind], mu_a[j], rho[j])
   }
+  # HMM likelihood via forward algorithm (separated by tracks)
   -forward(delta, Gamma, allprobs, trackID = ID)
 }
 
-## 2-state model
 
+# Initial parameter list
 par <- list(
   eta = rep(-2, 2),
   log_mu = log(c(0.01, 1)),
@@ -63,6 +81,8 @@ par <- list(
   logit_rho = qlogis(c(0.2, 0.3)),
   mu_a = c(pi, 0)
 )
+
+# Data and hyperparameter list
 dat <- list(
   step = data$step,
   angle = data$angle,
@@ -70,31 +90,46 @@ dat <- list(
   N = 2
 )
 
-obj0 <- MakeADFun(nll0, par, map = list(mu_a = factor(rep(NA, 2))))
+
+# Constructing AD likelihood
+map <- list(mu_a = factor(rep(NA, 2))) # fixing angle mean at init
+obj0 <- MakeADFun(nll0, par, map = map)
+
+# Optimising likelihood
 opt0 <- nlminb(obj0$par, obj0$fn, obj0$gr)
 
+# Getting reported quantities
 mod0 <- report(obj0)
+
+# state-dependent parameters
 mu <- mod0$mu
 sigma <- mod0$sigma
 (rho <- mod0$rho)
-
 mod0$zprob
+
+# state process parameters
 mod0$Gamma
 delta <- mod0$delta
 
+
+### Plotting state-dependent distributions
 par(mfrow = c(1,2))
+# step length
 hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2))
 for(j in 1:2) {
   curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
 }
-
+# turning angle
 hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30))
 for(j in 1:2) {
   curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
 }
+# marginal = sum
 curve(delta[1] * dwrpcauchy(x, c(pi,0)[1], rho[1]) +
         delta[2] * dwrpcauchy(x, c(pi,0)[2], rho[2]), add = TRUE, lwd = 2, lty = 2)
 
+
+### Pseudo-residuals
 pres_step <- pseudo_res(
   data$step,
   "gamma2",
@@ -102,22 +137,25 @@ pres_step <- pseudo_res(
   mod = mod0
 )
 plot(pres_step)
-
 # no residuals for wrpcauchy possible
 
 
+### State decoding via Viterbi algorithm
 mod0$states <- viterbi(mod = mod0)
 
+
+### Plotting locations with decoded states
 par(mfrow = c(1,1))
 idx <- 1:10000
-# plot(data$step[idx], col = color[mod0$states[idx]], type = "h")
 plot(data$x[idx], data$y[idx], asp = 1,type = "l")
 points(data$x[idx], data$y[idx], cex = 0.8,
        col = scales::alpha(color[mod0$states[idx]], 0.4), pch = 20)
 
 
-## 3-state model
 
+# Homogeneous 3-state model -----------------------------------------------
+
+# Initial parameter list
 par <- list(
   eta = rep(-2, 6),
   log_mu = log(c(0.01, 0.5, 1.5)),
@@ -126,16 +164,17 @@ par <- list(
   logit_rho = qlogis(c(0.2, 0.3, 0.4)),
   mu_a = c(pi, pi, 0)
 )
+
+# Data and hyperparamter list
 dat <- list(
   step = data$step,
   angle = data$angle,
   ID = data$ID,
-  N = 3
+  N = 3 # now 3 states
 )
 
 obj0.3 <- MakeADFun(nll0, par)
 opt0.3 <- nlminb(obj0.3$par, obj0.3$fn, obj0.3$gr)
-
 mod0.3 <- report(obj0.3)
 
 mu <- mod0.3$mu
@@ -144,13 +183,17 @@ rho <- mod0.3$rho
 delta <- mod0.3$delta
 
 
+### Plotting state-dependent distributions
 par(mfrow = c(1,2))
-hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2))
+# step lengths
+hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2),
+     main = "", xlab = "Step length")
 for(j in 1:3) {
   curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
 }
-
-hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30))
+# turning angles
+hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30),
+     main = "", xlab = "Turning angle")
 for(j in 1:3) {
   curve(delta[j] * dwrpcauchy(x, c(pi,pi,0)[j], rho[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
 }
@@ -158,6 +201,8 @@ curve(delta[1] * dwrpcauchy(x, pi, rho[1]) +
         delta[2] * dwrpcauchy(x, pi, rho[2]) +
         delta[3] * dwrpcauchy(x, 0, rho[3]), add = TRUE, lwd = 2, lty = 2)
 
+
+### Pseudo-residuals
 pres_step <- pseudo_res(
   data$step,
   "gamma2",
@@ -166,14 +211,16 @@ pres_step <- pseudo_res(
 )
 plot(pres_step)
 
+
+## State decoding
 mod0.3$states <- viterbi(mod = mod0.3)
 
 idx <- 1:10000
-# plot(data$step[idx], col = color[mod0$states[idx]], type = "h")
-plot(data$x[idx], data$y[idx], asp = 1,type = "l")
+par(mfrow = c(1,1))
+plot(data$x[idx], data$y[idx], asp = 1, type = "l", bty = "n",
+     xlab = "Longitude", ylab = "Latitude")
 points(data$x[idx], data$y[idx], cex = 0.8,
        col = scales::alpha(color[mod0.3$states[idx]], 0.4), pch = 20)
-
 
 # We are setteling for 2 states:
 ### Much overlap between states 2 and 3 (splitting movement into 2)
@@ -184,19 +231,18 @@ rm(obj0.3)
 gc()
 
 
-# Model with periodic variation in the tpm --------------------------------
 
-# We know lions are nocturnal so we want to capture this.
+# 2-state model with periodic variation in tpm ----------------------------
+# (We know lions are nocturnal so we want to capture this)
 
+# likelihood
 nll1 <- function(par) {
   getAll(par, dat)
 
   Gamma <- tpm_g(Z, beta)
-  Gamma <- Gamma[,, hour]
-  Delta <- matrix(0, length(startInd), 2)
-  for(i in 1:length(startInd)){
-    Delta[i, ] <- stationary_p(Gamma[,,startInd[i]+0:23], t = 1)
-  }
+  Delta <- stationary_p(Gamma) # periodically stationary dist
+  REPORT(Delta)
+  delta <- Delta[hour[startInd], ] # initial dist for each track
 
   mu <- exp(log_mu); REPORT(mu)
   sigma <- exp(log_sigma); REPORT(sigma)
@@ -209,19 +255,19 @@ nll1 <- function(par) {
     allprobs[ind,j] <- dzigamma2(step[ind], mu[j], sigma[j], zprob[j]) *
       dwrpcauchy(angle[ind], c(pi, 0)[j], rho[j])
   }
-  -forward_g(Delta, Gamma, allprobs, trackID = ID)
+  -forward_g(delta, Gamma[,,hour], allprobs, trackID = ID)
 }
 
-## 2 state model
-
+# Constructing sine, cosine design matrix
 Z <- cosinor(1:24, period = c(24, 12, 6)) # 3 sin/cos minimises AIC and BIC
 
+# Initial parameters and data
 par <- list(
-  beta = cbind(rep(-2, 2), matrix(0, 2, ncol(Z))),
-  log_mu = log(c(0.01, 1)),
-  log_sigma = log(c(0.01, 2)),
-  logit_zprob = qlogis(c(0.001, 0.001)),
-  logit_rho = qlogis(c(0.2, 0.3))
+  beta = cbind(mod0$par$eta, matrix(0, 2, ncol(Z))),
+  log_mu = log(mod0$mu),
+  log_sigma = log(mod0$sigma),
+  logit_zprob = qlogis(mod0$zprob),
+  logit_rho = qlogis(mod0$rho)
 )
 dat <- list(
   step = data$step,
@@ -235,35 +281,55 @@ dat <- list(
 
 obj1 <- MakeADFun(nll1, par)
 opt1 <- nlminb(obj1$par, obj1$fn, obj1$gr)
-
 mod1 <- report(obj1)
+
+
+### Sampling from distribution of MLE
+samples1 <- MCreport(obj1)
+Delta2s <- sapply(samples1$beta, function(b){
+  stationary_p(tpm_g(Z, b))[,2]
+})
+# Computing quantials of p-stationary distribution
+Delta_quantiles <- t(apply(Delta2s, 1, quantile, prob = c(0.025, 0.975)))
 
 (mu <- mod1$mu)
 (sigma <- mod1$sigma)
 (rho <- mod1$rho)
 Gamma <- tpm_g(Z, mod1$beta)
-Delta <- stationary_p(Gamma)
+Delta <- stationary_p(Gamma) # at MLE
 
+
+### Plotting periodically stationary state distribution
 par(mfrow = c(1,1))
-plot(Delta[,2], type = "b", ylim = c(0,1), col = color[2], lwd = 2)
+plot(Delta[,2], type = "b", ylim = c(0,1), col = color[2], lwd = 2,
+     bty = "n", xlab = "Hour", ylab = "Pr(active)")
+lines(Delta_quantiles[,1], col = color[2])
+lines(Delta_quantiles[,2], col = color[2])
 
 mod1$states <- viterbi_g(mod = mod1)
 delta <- prop.table(table(mod1$states))
 
 
+## Plotting state-dependent distributions
 par(mfrow = c(1,2))
-hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2))
+# step length
+hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2),
+     main = "", xlab = "Step length")
 for(j in 1:2) {
   curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
 }
-
-hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30))
+# turning angle
+hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30),
+     main = "", xlab = "Turning angle")
 for(j in 1:2) {
   curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
 }
+# marginal
 curve(delta[1] * dwrpcauchy(x, pi, rho[1]) +
         delta[2] * dwrpcauchy(x, 0, rho[2]), add = TRUE, lwd = 2, lty = 2)
 
+
+### Pseudo-residuals
 pres_step <- pseudo_res(
   data$step,
   "gamma2",
@@ -276,12 +342,12 @@ plot(pres_step)
 
 # Model with spatial field in the tpm -------------------------------------
 
-# constructing the mesh for GMRF approximation to spatial field
+# Constructing the mesh for GMRF approximation to spatial field
 loc <- cbind(data$x_int, data$y_int) # coords with interpolated NAs
-
+# Boundaries
 bnd_inner <- fm_nonconvex_hull(loc, convex=0.04) # inner boundary
 bnd_outer <- fm_nonconvex_hull(loc, convex=0.15) # outer boundary
-
+# Actual mesh building
 mesh <- fm_mesh_2d(
   loc=loc,
   boundary=list(bnd_inner, bnd_outer),
@@ -291,17 +357,24 @@ mesh <- fm_mesh_2d(
   plot.delay=0.5
 )
 
-par(mfrow = c(1,1))
+# pdf("./figs/lion_mesh.pdf", width = 7, height = 5)
+oldpar <- par(mfrow = c(1,1), mar = rep(0.5, 4))
 plot(mesh)
-# points(data$x, data$y)
+points(data$x, data$y, pch = 4, col = alpha("darkblue", 0.2), cex = 0.5, lwd = 0.5)
+par(oldpar)
+# dev.off()
 
-# Calculate finite element matrices c0,g1, g2 need for precision matrix Q
+
+### Calculate finite element matrices c0,g1, g2 need for precision matrix Q
 spde <- fm_fem(mesh)
 dim(spde$c0)
 
-# prediction matrix for observed locations
+
+### Prediction matrix for observed locations
 X_p <- fm_basis(mesh, loc)
 
+
+# likelihood
 jnll <- function(par) {
   getAll(par, dat, warn = FALSE)
 
@@ -310,12 +383,13 @@ jnll <- function(par) {
   zprob <- plogis(logit_zprob); REPORT(zprob)
   rho_angle <- plogis(logit_rho_angle); REPORT(rho_angle)
 
-  Eta <- matrix(eta, length(step), 2, byrow = TRUE); REPORT(eta)
-  Eta[,1] <- Eta[,1] + as.numeric(X_p %*% w); REPORT(w) # field only for Pr(active -> resting)
-
+  # State process tpm building
+  Eta <- matrix(eta, length(step), 2, byrow = TRUE)
+  Eta[,1] <- Eta[,1] + as.numeric(X_p %*% w) # field only for Pr(active -> resting)
   Gamma <- tpm_g(Eta = Eta)
-  Delta <- stationary(Gamma[,,startInd])
+  Delta <- stationary(Gamma[,,startInd]) # use this as initial
 
+  # State-dependent densities on log-scale now for accuracy
   lallprobs <- matrix(0, length(step), 2)
   ind <- which(!is.na(step) & !is.na(angle))
   for(j in 1:2) {
@@ -324,22 +398,25 @@ jnll <- function(par) {
   }
 
   ## HMM likelihood
-  nll <- -forward_g(Delta, Gamma, lallprobs,
-                     trackID = ID, bw = bw, logspace = TRUE, ad = T)
+  nll <- -forward_g(Delta, Gamma, lallprobs, trackID = ID,
+                    bw = bw, # bandwidth parameter leading to banded Hessian
+                    logspace = TRUE) # computations on log-scale
 
   ## GMRF likelihood
   tau_sq <- exp(log_tau_sq); tau <- sqrt(tau_sq); REPORT(tau)
   kappa_sq <- exp(log_kappa_sq); kappa <- sqrt(kappa_sq); REPORT(kappa)
   rho <- sqrt(8) / kappa; REPORT(rho) # dist at which corr has dropped to 0.1
 
+  # Precision matrix of the field
   Q <- tau_sq * (kappa_sq*kappa_sq * c0 + 2 * kappa_sq * g1 + g2)
   nll <- nll - sum(dgmrf(w, 0, Q, log = TRUE))
 
   nll
 }
 
+# Initial parameter list
 par <- list(
-  eta = qlogis(c(0.1, 0.1)),
+  eta = mod0$par$eta,
   log_mu = log(mod0$mu),
   log_sigma = log(mod0$sigma),
   logit_zprob = qlogis(mod0$zprob),
@@ -348,6 +425,8 @@ par <- list(
   log_kappa_sq = log(10^2),
   w = rep(0, nrow(spde$c0))
 )
+
+# Data and hyperparameter list
 dat <- list(
   step = data$step,
   angle = data$angle,
@@ -363,11 +442,18 @@ dat <- list(
 )
 
 t1 <- Sys.time()
+# Constructing marginal likelihood via automatic Laplace
 obj_sp1 <- MakeADFun(jnll, par, random = "w")
+
+# Optimising marginal likelihood
 opt_sp1 <- nlminb(obj_sp1$par, obj_sp1$fn, obj_sp1$gr)
 Sys.time() - t1
 
+# Reporting at optimum
 mod_sp1 <- report(obj_sp1)
+
+# Sampling parameters from approx posterior distribution (including random effects)
+samples_sp1 <- MCreport(obj_sp1)
 
 mod_sp1$states <- viterbi_g(mod = mod_sp1)
 delta <- prop.table(table(mod_sp1$states))
@@ -376,13 +462,16 @@ mu <- mod_sp1$mu
 sigma <- mod_sp1$sigma
 rho_angle <- mod_sp1$rho_angle
 
+
+### Plotting state-dependent distributions
 par(mfrow = c(1,2))
-hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2))
+hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2),
+     main = "", xlab = "Step length")
 for(j in 1:2) {
   curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 1000)
 }
-
-hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30))
+hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30),
+     main = "", xlab = "Step length")
 for(j in 1:2) {
   curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho_angle[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
 }
@@ -390,15 +479,15 @@ curve(delta[1] * dwrpcauchy(x, pi, rho_angle[1]) +
         delta[2] * dwrpcauchy(x, 0, rho_angle[2]), add = TRUE, lwd = 2, lty = 2)
 
 
-## visualise estimated field
-
+### Visualising estimated spatial field
+# fine (1024 x 1024) spatial grid
 x_seq <- seq(min(data$x_int), max(data$x_int), length.out = 1024)
 y_seq <- seq(min(data$y_int), max(data$y_int), length.out = 1024)
 grid <- as.matrix(expand.grid(x_seq, y_seq))
 
 # Projection matrix on grid
 A <- fm_basis(mesh, grid)
-field <- as.numeric(A %*% mod_sp1$w) + mod_sp1$eta[1]
+field <- as.numeric(A %*% mod_sp1$par$w) + mod_sp1$par$eta[1]
 
 z1 <- matrix(field, nrow = length(x_seq), ncol = length(y_seq))
 g1 <- plogis(z1) # transition probability
@@ -409,15 +498,13 @@ image(x_seq, y_seq, g1,
       col = viridis(35),
       main = expression(Pr(active~"→"~resting)), bty = "n", asp = 1)
 
-# idx <- which(mod_sp1$states == 1)
-# points(data$x[-idx], data$y[-idx], col = "#00000040")
-
 rm(obj_sp1)
 gc()
 
 
 # Model with spatial field and periodic variation in the tpm --------------
 
+# likelihood
 jnll2 <- function(par) {
   getAll(par, dat, warn = FALSE)
 
@@ -426,9 +513,9 @@ jnll2 <- function(par) {
   zprob <- plogis(logit_zprob); REPORT(zprob)
   rho_angle <- plogis(logit_rho_angle); REPORT(rho_angle)
 
-  Eta <- cbind(1, Z) %*% t(beta); REPORT(beta) # periodic variation part, calculations for 1:24 only
-  Eta <- Eta[hour, ] # rep according to time of day
-  Eta[,1] <- Eta[,1] + as.numeric(X_p %*% w); REPORT(w) # field only for Pr(active -> resting)
+  Eta <- cbind(1, Z) %*% t(beta) # periodic variation part, calculations for 1:24 only
+  Eta <- Eta[hour, ] # repeat rows according to time of day
+  Eta[,1] <- Eta[,1] + as.numeric(X_p %*% w) # field only for Pr(active -> resting)
   Gamma <- tpm_g(Eta = Eta)
   Delta <- stationary(Gamma[,,startInd])
 
@@ -440,8 +527,8 @@ jnll2 <- function(par) {
   }
 
   ## HMM likelihood
-  nll <- -forward_g(Delta, Gamma, lallprobs,
-                    trackID = ID, bw = bw, logspace = TRUE)
+  nll <- -forward_g(Delta, Gamma, lallprobs, trackID = ID,
+                    bw = bw, logspace = TRUE)
 
   ## GMRF likelihood
   tau_sq <- exp(log_tau_sq); tau <- sqrt(tau_sq); REPORT(tau)
@@ -454,6 +541,7 @@ jnll2 <- function(par) {
   nll
 }
 
+# Initial parameters and data
 par <- list(
   beta = mod1$beta,
   log_mu = log(mod1$mu),
@@ -481,27 +569,27 @@ dat <- list(
 )
 
 t1 <- Sys.time()
+# Constructing marginal likelihood via automatic Laplace
 obj_sp2 <- MakeADFun(jnll2, par, random = "w")
+
+# Optimising marginal likelihood
 opt_sp2 <- nlminb(obj_sp2$par, obj_sp2$fn, obj_sp2$gr)
 Sys.time() - t1
 
 mod_sp2 <- report(obj_sp2)
-
-sdr <- sdreport(obj_sp2, getJointPrecision = TRUE)
-mod_sp2$sdr <- sdr
+samples_sp2 <- MCreport(obj_sp2)
 
 mod_sp2$states <- viterbi_g(mod = mod_sp2)
-delta <- prop.table(table(mod_sp2$states))
+delta <- prop.table(table(mod_sp2$states)) # Monte Carlo approx to state distribution
 
 mu <- mod_sp2$mu
 sigma <- mod_sp2$sigma
 rho_angle <- mod_sp2$rho_angle
 
 
+### Plotting state-dependent distributions
 # pdf("./figs/lions_statedep.pdf", width = 7, height = 3.5)
-
 par(mfrow = c(1,2), mar = c(5,4,4,2)+0.1, xpd = FALSE)
-
 hist(data$step, prob = TRUE, bor = "white", breaks = 100,
      main = "", xlab = "Step length (km)",
      xlim = c(0,4), ylim = c(0,1))
@@ -511,7 +599,7 @@ for(j in 1:2) {
 curve(delta[1] * dgamma2(x, mu[1], sigma[1])+
         delta[2] * dgamma2(x, mu[2], sigma[2]), add = TRUE, lwd = 2, lty = 2, n = 1000)
 
-legend("topright", col = c("orange", "deepskyblue", "black"), lty = c(1,1,2), lwd = 2,
+legend("topright", col = c(color[1:2], "black"), lty = c(1,1,2), lwd = 2,
        legend = c("State 1", "State 2", "Marginal"), bty = "n")
 
 hist(data$angle, prob = TRUE, bor = "white",
@@ -525,20 +613,18 @@ for(j in 1:2) {
 }
 curve(delta[1] * dwrpcauchy(x, pi, rho_angle[1]) +
         delta[2] * dwrpcauchy(x, 0, rho_angle[2]), add = TRUE, lwd = 2, lty = 2, n = 500)
-
 # dev.off()
 
 
-## visualise estimated field
+### Visualising estimated field in this model
 
-field <- as.numeric(A %*% mod_sp2$w) + mod1$beta[1,1]
-
+field <- as.numeric(A %*% mod_sp2$par$w) + mod1$par$beta[1,1]
 z2 <- matrix(field, nrow = length(x_seq), ncol = length(y_seq))
 g2 <- plogis(z2)
 
 
 # cairo_pdf("./figs/lions_spatial_field.pdf", width = 7.365, height = 4.95)
-par(mfrow = c(1,1), mar = c(5,4,4,4), xpd = NA)
+oldpar <- par(mfrow = c(1,1), mar = c(5,4,4,4), xpd = NA)
 image(x_seq, y_seq, g2,
       xlab = "Longitude", ylab = "Latitude",
       # col = viridis(300),
@@ -566,10 +652,11 @@ text(legend_x[2] + 0.02 * diff(usr[1:2]),
      labels = legend_values,
      adj = 0,
      cex = 0.9)
+par(oldpar)
 # dev.off()
 
 
-# both fields
+# Comparing field in both models
 par(mfrow = c(1,2))
 image(x_seq, y_seq, z1,
       xlab = "x", ylab = "y",
@@ -581,26 +668,22 @@ image(x_seq, y_seq, z2,
       main = "spatial model with periodic var.", bty = "n", asp = 1)
 
 
-### plot periodically stationary state distribution
-
-Sigma <- mod_sp2$sdr$cov.fixed
-B <- 1000
-thetas <- mvtnorm::rmvnorm(B, mod_sp2$sdr$par.fixed, Sigma)
-betas <- array(dim = c(2, 7, B))
-for(i in 1:B) betas[,,i] <- matrix(thetas[i,1:14], 2, 7)
-
+### Plotting periodically stationary state distribution
+betas <- samples_sp2$beta
+B <- length(betas)
 tseq <- seq(0, 24, length = 200)
 Deltas <- array(dim = c(length(tseq), 2, B))
 Delta <- matrix(NA, length(tseq), 2)
 
+# Compute periodically stationary (and quantiles) on fine grid
 for(t in seq_along(tseq)) {
   print(t)
   ts <- tseq[t] + 0:23
   ts <- ts %% 24
   Z <- cosinor(ts, period = c(24,12,6))
-  Delta[t,] <-  stationary_p(tpm_g(Z, mod_sp2$beta), t = 1)
+  Delta[t,] <-  stationary_p(tpm_g(Z, mod_sp2$par$beta), t = 1)
   for(i in 1:B) {
-    Gamma <- tpm_g(Z, betas[,,i])
+    Gamma <- tpm_g(Z, betas[[i]])
     Deltas[t, ,i] <- stationary_p(Gamma, t = 1)
   }
 }
@@ -608,19 +691,6 @@ Delta_q <- apply(Deltas, 1:2, quantile, probs = c(0.025, 0.975))
 
 
 # pdf("./figs/lions_pstationary.pdf", width = 6, height = 4)
-
-par(mfrow = c(1,1))
-plot(tseq, Delta[,2], type = "l", lwd = 3,
-     ylim = c(0,0.8), col = color[2], bty = "n",
-     ylab = "Pr(active)", xlab = "Time of day", xaxt = "n")
-polygon(c(tseq, rev(tseq)), c(Delta_q[1, ,2], rev(Delta_q[2, ,2])),
-        col = scales::alpha(color[2], 0.25), border = NA)
-axis(1, at = seq(0, 24, by = 6), labels = seq(0, 24, by = 6))
-
-# dev.off()
-
-
-pdf("./figs/lions_pstationary.pdf", width = 6, height = 4)
 
 par(mfrow = c(1,1))
 plot(NA, bty = "n", ylim = c(0,0.8), xlim = c(0,24), ylab = "Pr(active)", xlab = "Time of day", xaxt = "n")
@@ -637,16 +707,17 @@ lines(tseq, Delta[,2], lwd = 3, col = alpha("black", 0.7))
 
 axis(1, at = seq(0, 24, by = 4), labels = seq(0, 24, by = 4))
 
-dev.off()
+# dev.off()
 
 
 
-## model comparison
+### Model comparison in terms of information criteria
 AIC(mod0, mod1, mod_sp1, mod_sp2)
 BIC(mod0, mod1, mod_sp1, mod_sp2)
+# both prefer spatial model with periodic variation
 
 
-## residual comparison
+### Residual comparison in the two models
 pres1 <- pseudo_res(
   data$step,
   "gamma2",
@@ -659,9 +730,6 @@ pres2 <- pseudo_res(
   list(mean = mu, sd = sigma),
   mod = mod_sp2
 )
-
 par(mfrow = c(2,3))
 plot(pres1)
 plot(pres2)
-
-
