@@ -302,7 +302,7 @@ lines(data$time[idx], mod$f[idx], lwd = 2, col = "plum") # line width is wider t
 legend(x = 1335.415, y = 190,
        legend = c("Quiet", "Firing", "Decaying", "Trend"),
        pch = c(rep(16, 3), NA),
-       lwd = c(rep(NA, 3), 3),
+       lwd = c(rep(NA, 3), 2),
        col = c(color, "plum"), bty = "n")
 
 # dev.off()
@@ -334,3 +334,4 @@ legend("topright",
        col = c(color, "plum"), box.col = "gray")
 
 # dev.off()
+
