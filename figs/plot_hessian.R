@@ -107,12 +107,12 @@ idx <- 1:60
 # left panel
 # pdf("./figs/denseH.pdf", width = 5, height = 5)
 SparseM::image(H_dense[idx, idx])
-dev.off()
+# dev.off()
 
 # right panel
 # pdf("./figs/bandedH.pdf", width = 5, height = 5)
 SparseM::image(H_banded[idx, idx])
-dev.off()
+# dev.off()
 
 H_dense <- as.matrix(H_dense)
 Vals <- matrix(NA, 50, 10)
@@ -121,3 +121,4 @@ for(i in 1:50) {
 }
 aVals <- abs(Vals)
 plot(log(colMeans(aVals)))
+
