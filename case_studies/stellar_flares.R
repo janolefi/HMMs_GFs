@@ -16,6 +16,7 @@ library(scales)     # for semi-transparent colors
 ### Colors for plotting
 color <- c("#00000070", "red", "orange")
 
+
 ### Changing AD setting inside RTMB for faster calculations
 TapeConfig(matmul = "plain")
 
@@ -118,10 +119,10 @@ mod0$kappa
 mod0$omega
 
 # Sample from posterior distribution for parameter uncertainty
-par_samples0 <- MCreport(obj0)
-fs <- t(sapply(par_samples0, function(p) c(p$w1,p$w2) + p$mu))
-# quantiles for smooth
-qf <- t(apply(fs, 2, quantile, probs = c(0.025, 0.975)))
+samples0 <- MCreport(obj0, report = TRUE)
+# quantiles for smooth f
+qf <- t(apply(simplify2array(samples0$f), 1,
+              quantile, probs = c(0.025, 0.975)))
 
 ### visualising results
 idx <- 6000:8000
@@ -246,9 +247,11 @@ mod$tau
 mod$omega
 
 # Sampling from posterior distribution for uncertainty
-par_samples <- MCreport(obj)
-f_samples <- t(sapply(par_samples, function(p) c(p$w1, p$w2) + p$mu))
-f_quantiles <- t(apply(f_samples, 2, quantile, probs = c(0.025, 0.975)))
+samples <- MCreport(obj, report = TRUE) # takes some time
+
+# Computing 0.025 and 0.975 (pointwise) quantiles of f
+f_quantiles <- t(apply(simplify2array(samples$f), 1,
+                       quantile, probs = c(0.025, 0.975)))
 
 
 ### State decoding
@@ -293,7 +296,7 @@ plot(data$time[idx], data$y[idx], col = color[states[idx]], pch = 16,
 polygon(data$time[c(idx, rev(idx))],
         c(f_quantiles[idx,1], f_quantiles[rev(idx),2]),
         col = alpha("plum", 0.35), border = NA)
-lines(data$time[idx], mod$f[idx], lwd = 3, col = "plum") # line width is wider thatn CI
+lines(data$time[idx], mod$f[idx], lwd = 2, col = "plum") # line width is wider thatn CI
 
 # Legend
 legend(x = 1335.415, y = 190,
