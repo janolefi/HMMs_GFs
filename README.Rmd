@@ -21,6 +21,8 @@ The figures presented in the paper are provided in the folder `figs` and all dat
 
 ![Estimated spatial field in the lion HMM](./figs/lions_spatial_field.jpg)
 
+<br><br>
+
 When using `LaMa`, please cite the package as follows:
 
 Fischer J.-O. (2026). LaMa: Fast Numerical Maximum Likelihood Estimation for Latent Markov Models. 

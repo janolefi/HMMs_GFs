@@ -35,6 +35,8 @@ alt="Estimated spatial field in the lion HMM" />
 HMM</figcaption>
 </figure>
 
+<br><br>
+
 When using `LaMa`, please cite the package as follows:
 
 Fischer J.-O. (2026). LaMa: Fast Numerical Maximum Likelihood Estimation
