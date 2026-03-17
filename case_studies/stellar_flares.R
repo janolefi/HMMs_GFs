@@ -236,7 +236,7 @@ obj <- MakeADFun(jnll, par, random = c("w1", "w2", "z.star"))
 
 # Optimising
 system.time(
-  opt <- nlminb(obj$par, obj$fn, obj$gr)
+  opt <- nlminb(obj$par, obj$fn, obj$gr) # inital inner Hessian evaluation takes time
 )
 Sys.time() - t1
 

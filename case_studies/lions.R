@@ -432,7 +432,6 @@ dat <- list(
   angle = data$angle,
   ID = data$ID,
   N = 2,
-  ID = data$ID,
   startInd = calc_trackInd(data$ID),
   X_p = X_p,
   c0 = spde$c0, # C
@@ -446,7 +445,7 @@ t1 <- Sys.time()
 obj_sp1 <- MakeADFun(jnll, par, random = "w")
 
 # Optimising marginal likelihood
-opt_sp1 <- nlminb(obj_sp1$par, obj_sp1$fn, obj_sp1$gr)
+opt_sp1 <- nlminb(obj_sp1$par, obj_sp1$fn, obj_sp1$gr) # inital inner Hessian evaluation takes time
 Sys.time() - t1
 
 # Reporting at optimum
@@ -498,8 +497,11 @@ image(x_seq, y_seq, g1,
       col = viridis(35),
       main = expression(Pr(active~"→"~resting)), bty = "n", asp = 1)
 
+
+### Save memory
 rm(obj_sp1)
 gc()
+
 
 
 # Model with spatial field and periodic variation in the tpm --------------
@@ -557,7 +559,6 @@ dat <- list(
   angle = data$angle,
   ID = data$ID,
   N = 2,
-  ID = data$ID,
   startInd = calc_trackInd(data$ID),
   Z = Z,
   hour = data$hour,
@@ -676,8 +677,7 @@ Deltas <- array(dim = c(length(tseq), 2, B))
 Delta <- matrix(NA, length(tseq), 2)
 
 # Compute periodically stationary (and quantiles) on fine grid
-for(t in seq_along(tseq)) {
-  print(t)
+for(t in seq_along(tseq)) { # takes some time
   ts <- tseq[t] + 0:23
   ts <- ts %% 24
   Z <- cosinor(ts, period = c(24,12,6))
@@ -703,12 +703,10 @@ polygon(x = c(18.5, 24, 24, 18.5), y = c(0.01, 0.01, 0.8, 0.8), col = "gray90", 
 polygon(c(tseq, rev(tseq)), c(Delta_q[1, ,2], rev(Delta_q[2, ,2])),
         col = alpha("black", 0.25), border = FALSE)
 lines(tseq, Delta[,2], lwd = 3, col = alpha("black", 0.7))
-# lines(tseq[-ind], Delta[-ind,2], lwd = 2, col = alpha("black", 0.5))
 
 axis(1, at = seq(0, 24, by = 4), labels = seq(0, 24, by = 4))
 
 # dev.off()
-
 
 
 ### Model comparison in terms of information criteria
