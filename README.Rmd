@@ -19,9 +19,9 @@ Code to reproduce the case studies can be found in the `case_studies` folder whi
 
 The figures presented in the paper are provided in the folder `figs` and all data necessary for the case studies can be found in the `data` folder. The raw lion data set cannot be provided in this repository and must be downloaded from [Movebank](https://www.movebank.org/cms/webapp?gwt_fragment=page=studies,path=study3809257699) if of interest.
 
-![Estimated spatial field in the lion HMM](./figs/lions_spatial_field.jpg)
+![](./figs/lions_spatial_field.jpg)
 
-<br><br>
+<br>
 
 When using `LaMa`, please cite the package as follows:
 
