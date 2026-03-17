@@ -28,6 +28,13 @@ must be downloaded from
 [Movebank](https://www.movebank.org/cms/webapp?gwt_fragment=page=studies,path=study3809257699)
 if of interest.
 
+<figure>
+<img src="./figs/lions_spatial_field.jpg"
+alt="Estimated spatial field in the lion HMM" />
+<figcaption aria-hidden="true">Estimated spatial field in the lion
+HMM</figcaption>
+</figure>
+
 When using `LaMa`, please cite the package as follows:
 
 Fischer J.-O. (2026). LaMa: Fast Numerical Maximum Likelihood Estimation
