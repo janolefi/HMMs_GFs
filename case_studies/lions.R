@@ -9,12 +9,12 @@
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for ExGaussian distribution
 library(fmesher)    # for mesh and FEM matrices
-library(scales)     # for semi-transparent colors
+library(scales)     # for semi-transparent color
 library(viridis)    # for field color palette
 library(leaflet)    # for satellite images
 
 
-### Colors for plotting
+### Colors for plotting and random init
 source("utils.R")
 
 
@@ -95,10 +95,10 @@ dat <- list(
 map <- list(mu_a = factor(rep(NA, 2))) # fixing angle mean at init
 obj0 <- MakeADFun(nll0, par, map = map)
 
-# Optimising likelihood
+# Optimising for many initial values
 opt0 <- nlminb(obj0$par, obj0$fn, obj0$gr)
 
-# Getting reported quantities
+# Getting reported quantities from best model
 mod0 <- report(obj0)
 
 # state-dependent parameters
@@ -117,12 +117,12 @@ par(mfrow = c(1,2))
 # step length
 hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2))
 for(j in 1:2) {
-  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 # turning angle
 hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30))
 for(j in 1:2) {
-  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 # marginal = sum
 curve(delta[1] * dwrpcauchy(x, c(pi,0)[1], rho[1]) +
@@ -149,7 +149,7 @@ par(mfrow = c(1,1))
 idx <- 1:10000
 plot(data$x[idx], data$y[idx], asp = 1,type = "l")
 points(data$x[idx], data$y[idx], cex = 0.8,
-       col = scales::alpha(color[mod0$states[idx]], 0.4), pch = 20)
+       col = scales::alpha(colorCB[mod0$states[idx]], 0.4), pch = 20)
 
 
 
@@ -189,13 +189,13 @@ par(mfrow = c(1,2))
 hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2),
      main = "", xlab = "Step length")
 for(j in 1:3) {
-  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 # turning angles
 hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30),
      main = "", xlab = "Turning angle")
 for(j in 1:3) {
-  curve(delta[j] * dwrpcauchy(x, c(pi,pi,0)[j], rho[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dwrpcauchy(x, c(pi,pi,0)[j], rho[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 curve(delta[1] * dwrpcauchy(x, pi, rho[1]) +
         delta[2] * dwrpcauchy(x, pi, rho[2]) +
@@ -220,7 +220,7 @@ par(mfrow = c(1,1))
 plot(data$x[idx], data$y[idx], asp = 1, type = "l", bty = "n",
      xlab = "Longitude", ylab = "Latitude")
 points(data$x[idx], data$y[idx], cex = 0.8,
-       col = scales::alpha(color[mod0.3$states[idx]], 0.4), pch = 20)
+       col = scales::alpha(colorCB[mod0.3$states[idx]], 0.4), pch = 20)
 
 # We are setteling for 2 states:
 ### Much overlap between states 2 and 3 (splitting movement into 2)
@@ -301,10 +301,10 @@ Delta <- stationary_p(Gamma) # at MLE
 
 ### Plotting periodically stationary state distribution
 par(mfrow = c(1,1))
-plot(Delta[,2], type = "b", ylim = c(0,1), col = color[2], lwd = 2,
+plot(Delta[,2], type = "b", ylim = c(0,1), col = colorCB[2], lwd = 2,
      bty = "n", xlab = "Hour", ylab = "Pr(active)")
-lines(Delta_quantiles[,1], col = color[2])
-lines(Delta_quantiles[,2], col = color[2])
+points(Delta_quantiles[,1], col = colorCB[2], pch = 20)
+points(Delta_quantiles[,2], col = colorCB[2], pch = 20)
 
 mod1$states <- viterbi_g(mod = mod1)
 delta <- prop.table(table(mod1$states))
@@ -316,13 +316,13 @@ par(mfrow = c(1,2))
 hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2),
      main = "", xlab = "Step length")
 for(j in 1:2) {
-  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 # turning angle
 hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30),
      main = "", xlab = "Turning angle")
 for(j in 1:2) {
-  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 # marginal
 curve(delta[1] * dwrpcauchy(x, pi, rho[1]) +
@@ -468,12 +468,12 @@ par(mfrow = c(1,2))
 hist(data$step, prob = TRUE, bor = "white", breaks = 150, xlim = c(0,4), ylim = c(0,2),
      main = "", xlab = "Step length")
 for(j in 1:2) {
-  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 1000)
+  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 1000)
 }
 hist(data$angle, prob = TRUE, bor = "white", breaks = seq(-pi, pi, length = 30),
      main = "", xlab = "Step length")
 for(j in 1:2) {
-  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho_angle[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho_angle[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 curve(delta[1] * dwrpcauchy(x, pi, rho_angle[1]) +
         delta[2] * dwrpcauchy(x, 0, rho_angle[2]), add = TRUE, lwd = 2, lty = 2)
@@ -594,12 +594,12 @@ hist(data$step, prob = TRUE, bor = "white", breaks = 100,
      main = "", xlab = "Step length (km)",
      xlim = c(0,4), ylim = c(0,1))
 for(j in 1:2) {
-  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = color[j], lwd = 2, n = 1000)
+  curve(delta[j] * dgamma2(x, mu[j], sigma[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 1000)
 }
 curve(delta[1] * dgamma2(x, mu[1], sigma[1])+
         delta[2] * dgamma2(x, mu[2], sigma[2]), add = TRUE, lwd = 2, lty = 2, n = 1000)
 
-legend("topright", col = c(color[1:2], "black"), lty = c(1,1,2), lwd = 2,
+legend("topright", col = c(colorCB[1:2], "black"), lty = c(1,1,2), lwd = 2,
        legend = c("State 1", "State 2", "Marginal"), bty = "n")
 
 hist(data$angle, prob = TRUE, bor = "white",
@@ -609,7 +609,7 @@ hist(data$angle, prob = TRUE, bor = "white",
 axis(1, at = seq(-pi, pi, by = pi/2),
      labels = c(expression(-pi), expression(-pi/2), expression(0), expression(pi/2), expression(pi)))
 for(j in 1:2) {
-  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho_angle[j]), add = TRUE, col = color[j], lwd = 2, n = 500)
+  curve(delta[j] * dwrpcauchy(x, c(pi,0)[j], rho_angle[j]), add = TRUE, col = colorCB[j], lwd = 2, n = 500)
 }
 curve(delta[1] * dwrpcauchy(x, pi, rho_angle[1]) +
         delta[2] * dwrpcauchy(x, 0, rho_angle[2]), add = TRUE, lwd = 2, lty = 2, n = 500)

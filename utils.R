@@ -1,21 +1,9 @@
-# rgmrf <- function(n, mean = 0, Q) {
-#   if(length(mean) == 1) mean <- rep(mean, nrow(Q))
-#   samples <- RTMB:::rgmrf0(n, Q)
-#   samples <- samples + mean
-#   t(samples)
-# }
-# rgmrf <- function(n, mean = 0, Q) {
-#   d <- nrow(Q)
-#   if (length(mean) == 1) mean <- rep(mean, d)
-#   stopifnot(length(mean) == d)
-#   samples <- RTMB:::rgmrf0(n, Q)
-#   samples <- samples + mean
-#   t(samples)
-# }
+#### Colors used for plotting
 
-color <- c("#E69F00", "#56B4E9", "#009E73","#CC79A7", "#F0E442", "#0072B2", "#D55E00")
+# color-blind friendly palette
+colorCB <- c("#E69F00", "#56B4E9", "#009E73","#CC79A7", "#F0E442", "#0072B2", "#D55E00")
 
-
+# colors of the sun cycle
 sun_cycle_colors <- c(
   "#0b0d3e",  # 00:00 - Midnight (Night)
   "#0d1046",  # 00:30
@@ -66,3 +54,4 @@ sun_cycle_colors <- c(
   "#140f28",  # 23:00 - Late Night
   "#0e0a1e"   # 23:30
 )
+
