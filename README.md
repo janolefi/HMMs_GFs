@@ -5,11 +5,12 @@
 
 This repository contains `R` code for the case studies and simulation
 experiment presented in the paper “Fast and scalable inference in hidden
-Markov models with Gaussian fields”. The paper develops fast frequentist
-estimation techniques for hidden Markov models involving latent Gaussian
-fields. Estimation is performed via the automatic Laplace approximation
-implemented in [`RTMB`](https://kaskr.r-universe.dev/RTMB) and Gaussian
-fields are approximated by Gaussian Markov random fields via the [SPDE
+Markov models with Gaussian fields” (Fischer, 2026). The paper develops
+fast frequentist estimation techniques for hidden Markov models
+involving latent Gaussian fields. Estimation is performed via the
+automatic Laplace approximation implemented in
+[`RTMB`](https://kaskr.r-universe.dev/RTMB) and Gaussian fields are
+approximated by Gaussian Markov random fields via the [SPDE
 approach](https://academic.oup.com/jrsssb/article-abstract/73/4/423/7034732).
 The main methodological development is a *banded* forward algorithm,
 available through the `R` package
