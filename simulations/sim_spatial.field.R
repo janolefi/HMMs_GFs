@@ -18,9 +18,9 @@ true_par <- list(
 
 # Plot state-dependent distributions
 curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 10), ylim = c(0,1),
-      n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 3, col = cbPal[1])
+      n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 3, col = colorCB[1])
 curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500,
-      lwd = 3, col = cbPal[2])
+      lwd = 3, col = colorCB[2])
 
 # Function to simulate a data set
 sim_data <- function(n, p, kappa_pull = 0.3) {
@@ -264,8 +264,8 @@ bws <- c(2, 5, 10, 15)
 #                 mc.cores = nCores) # number of cores to parallelise on
 
 # Save results
-nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
-saveRDS(res, nm)
+# nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
+# saveRDS(res, nm)
 
 gc() # global cleanup
 
@@ -332,7 +332,7 @@ library(ggplot2)
 
 
 source("utils.R") # color palette
-col_vio <- c("2" = cbPal[1], "5" = cbPal[2], "10" = cbPal[3], "15" = cbPal[4])
+col_vio <- c("2" = colorCB[1], "5" = colorCB[2], "10" = colorCB[3], "15" = colorCB[4])
 
 # pivot to long
 res_long <- res_all %>%
@@ -365,7 +365,7 @@ eta21 <- ggplot(res_all, aes(x = factor(bw), y = eta21_diff, fill = factor(bw)))
   geom_hline(yintercept = 0, linetype = "dashed") +
   scale_fill_manual(values = col_vio)
 
-# pdf("./figs/sim_eta.pdf", width = 8, height = 4)
+# pdf("./figs/sim_eta_tall.pdf", width = 8, height = 5)
 (eta12 / eta21) +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom")
