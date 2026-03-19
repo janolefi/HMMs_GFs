@@ -1,7 +1,7 @@
 ####### Reproducing the analysis of Esquivel et al. (2025) #######
 # https://iopscience.iop.org/article/10.3847/1538-4357/ad95f6/meta
 
-# installing required packages
+# Installing required packages
 # install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
 
 # devtools::install_github("janolefi/LaMa")

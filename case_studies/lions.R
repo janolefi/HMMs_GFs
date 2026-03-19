@@ -1,6 +1,6 @@
 ####### Case study - lions in Kalahari #######
 
-# installing required packages
+# Installing required packages
 # install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
 
 # devtools::install_github("janolefi/LaMa")
