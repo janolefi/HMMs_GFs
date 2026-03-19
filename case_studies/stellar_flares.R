@@ -2,10 +2,9 @@
 # https://iopscience.iop.org/article/10.3847/1538-4357/ad95f6/meta
 
 # installing required packages
-# install.packages(c("RTMB", "fmesher"))
+# install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
 
 # devtools::install_github("janolefi/LaMa")
-# devtools::install_github("janolefi/RTMBdist")
 
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for ExGaussian distribution

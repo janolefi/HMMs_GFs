@@ -1,13 +1,12 @@
 ####### Case study - lions in Kalahari #######
 
 # installing required packages
-# install.packages(c("RTMB", "fmesher"))
+# install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
 
 # devtools::install_github("janolefi/LaMa")
-# devtools::install_github("janolefi/RTMBdist")
 
 library(LaMa)       # for HMM functions
-library(RTMBdist)   # for ExGaussian distribution
+library(RTMBdist)   # for zero-inflated gamma distribution
 library(fmesher)    # for mesh and FEM matrices
 library(scales)     # for semi-transparent color
 library(viridis)    # for field color palette
