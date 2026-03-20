@@ -131,7 +131,8 @@ lines(data$time[idx], mod0$f[idx], lwd = 2, col = "plum")
 polygon(c(data$time[idx], rev(data$time[idx])),
         c(qf[idx, 1], rev(qf[idx,2])), col = alpha("plum", 0.6), border = NA)
 
-# The predcited smooth is erratic whenever there is a flare -> 2 stage methods have problems
+# The predicted trend is erratic whenever there is a flare
+# -> 2 stage methods are problematic
 
 
 
