@@ -1,14 +1,26 @@
-library(parallel)
-library(RTMBdist)
+####### Simulation experiment - spatial field in TPM #######
 
+# Installing required packages
+# install.packages(c("RTMB", "fmesher", "LaMa", "parallel"))
+
+
+library(parallel) # parallelising fits
+library(LaMa)     # HMM functions
+
+
+### Colors
 source("utils.R")
+
+
+### Changing AD setting inside RTMB for faster calculations
+TapeConfig(matmul = "plain")
 
 # True spatial function for mean step length
 true_field <- function(x,y){
   2 * (sin(2*pi*x/40) + cos(2*pi*y/40))
 }
 
-# True parameter used for simulation
+# True parameters used for simulation
 true_par <- list(
   delta = c(0.5, 0.5),
   mu = c(0.2, 5),
@@ -16,14 +28,19 @@ true_par <- list(
   beta0 = c(-2, -2)
 )
 
-# Plot state-dependent distributions
+# Plot true state-dependent distributions
 curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 10), ylim = c(0,1),
       n = 500, bty = "n", ylab = "Density", xlab = "Step length", lwd = 3, col = colorCB[1])
 curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500,
       lwd = 3, col = colorCB[2])
 
-# Function to simulate a data set
-sim_data <- function(n, p, kappa_pull = 0.3) {
+
+
+### Function that simulates one data set
+sim_data <- function(n, # length of time series
+                     p, # parameter list
+                     kappa_pull = 0.3 # concentration for biased random walk
+                     ) {
   s <- rep(NA, n)
   s[1] <- sample(1:2, size = 1, prob = p$delta) # first state
   loc <- matrix(0, n, 2) # initialise location matrix
@@ -54,7 +71,9 @@ sim_data <- function(n, p, kappa_pull = 0.3) {
   data.frame(step = step, x = loc[,1], y = loc[,2], state = s, field_val = field_val)
 }
 
-# Simulate data set and fit model for given specification
+
+
+### Function that simulates data set and fits model for a given specification
 one_fit <- function(dummy,
                     nObs = 5000,
                     par = true_par,
@@ -62,7 +81,9 @@ one_fit <- function(dummy,
   set.seed(dummy) # for reproducibility of each iteration
 
   library(LaMa) # also loads RTMB
-  library(RTMBdist)
+
+  ### Changing AD setting inside RTMB for faster calculations
+  TapeConfig(matmul = "plain")
 
   # Simulate data
   data <- sim_data(nObs, par)
@@ -224,7 +245,7 @@ one_fit <- function(dummy,
   return(ret)
 }
 
-# safe wrapper to avoid failing
+### Safe wrapper to avoid failing inside mclapply()
 one_fit_safe <- function(dummy, ...){
   tryCatch(
     one_fit(dummy, ...),
@@ -235,7 +256,7 @@ one_fit_safe <- function(dummy, ...){
   )
 }
 
-# call one_fit in a loop over bws for the same data set
+### Call one_fit in a loop over bws for the SAME data set
 one_rep <- function(dummy, bws, ...) {
   res <- list()
   # loop over bws for same dummy -> same data set
@@ -248,12 +269,12 @@ one_rep <- function(dummy, bws, ...) {
 
 
 
-# Run simulation
+##### Run simulation #####
 nCores <- 3 # number of cores to use
 nSim <- 200 # number of data sets to simulate
 
-nObs <- 10000
-bws <- c(2, 5, 10, 15)
+nObs <- 10000 # time series length (has to be set to 5000, 10000 manually)
+bws <- c(2, 5, 10, 15) # bandwidths explored
 
 # parallelise over data sets
 # remove commenting to run
@@ -272,10 +293,12 @@ gc() # global cleanup
 
 
 
-# Results -----------------------------------------------------------------
+#### Results --------------------------------------------------------------
 
-# lood results
+# Lood results
 nSim <- 200
+
+# nObs has to be set to 5000 and then 10000 manually in order to obtain res_all
 nObs <- 10000
 nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
 res <- readRDS(nm)
@@ -314,7 +337,7 @@ results_10000$nObs <- 10000
 res_all <- rbind(results_5000, results_10000)
 
 
-# compute ROOT mean squared error
+# Compute ROOT mean squared error
 res_all$rmse21_g <- sqrt(res_all$mse21_g)
 res_all$rmse12_g <- sqrt(res_all$mse12_g)
 
@@ -323,7 +346,9 @@ res_all$rmse12 <- sqrt(res_all$mse12)
 
 
 
-# Visualise results -------------------------------------------------------
+#### Visualise results ----------------------------------------------------
+
+# install.packages(c("tidyr", "dplyr", "patchwork", "ggplot2"))
 
 library(tidyr)
 library(dplyr)
@@ -331,7 +356,8 @@ library(patchwork)
 library(ggplot2)
 
 
-source("utils.R") # color palette
+### Colors
+source("utils.R")
 col_vio <- c("2" = colorCB[1], "5" = colorCB[2], "10" = colorCB[3], "15" = colorCB[4])
 
 # pivot to long
