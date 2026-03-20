@@ -7,9 +7,9 @@
 
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for zero-inflated gamma distribution
-library(fmesher)    # for mesh and FEM matrices
-library(scales)     # for semi-transparent color
+library(fmesher)    # for mesh and finite element matrices
 library(viridis)    # for field color palette
+library(scales)     # for semi-transparent color
 library(leaflet)    # for satellite images
 
 
@@ -30,16 +30,16 @@ nrow(data)
 
 
 ### Plot data on satellite image
-# leaflet() %>%
-#   addProviderTiles(providers$Esri.WorldImagery) %>%
-#   fitBounds(lng1 = min(data$x, na.rm = TRUE),
-#             lat1 = min(data$y, na.rm = TRUE),
-#             lng2 = max(data$x, na.rm = TRUE),
-#             lat2 = max(data$y, na.rm = TRUE)) %>%
-#   addCircleMarkers(lng = data$x,
-#                    lat = data$y,
-#                    radius = 0.5,
-#                    color = "#00000040")
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  fitBounds(lng1 = min(data$x, na.rm = TRUE),
+            lat1 = min(data$y, na.rm = TRUE),
+            lng2 = max(data$x, na.rm = TRUE),
+            lat2 = max(data$y, na.rm = TRUE)) %>%
+  addCircleMarkers(lng = data$x,
+                   lat = data$y,
+                   radius = 0.5,
+                   color = "#00000040")
 
 
 

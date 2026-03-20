@@ -8,7 +8,7 @@
 
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for ExGaussian distribution
-library(fmesher)    # for mesh and FEM matrices
+library(fmesher)    # for mesh and finite element matrices
 library(scales)     # for semi-transparent colors
 
 
