@@ -3,6 +3,7 @@
 # Installing required packages
 # Newest CRAN versions of RTMB (1.9), LaMa (2.1.0), and RTMBdist (1.0.2) are required!
 # install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
+# install.packages(c("viridis", "scales", "leaflet"))
 
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for zero-inflated gamma distribution
