@@ -1,9 +1,8 @@
 ####### Case study - lions in Kalahari #######
 
 # Installing required packages
+# Newest CRAN versions of RTMB (1.9), LaMa (2.1.0), and RTMBdist (1.0.2) are required!
 # install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
-
-# devtools::install_github("janolefi/LaMa")
 
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for zero-inflated gamma distribution
@@ -16,9 +15,6 @@ library(leaflet)    # for satellite images
 ### Colors for plotting and random init
 source("utils.R")
 
-
-### Changing AD setting inside RTMB for faster calculations
-TapeConfig(matmul = "plain")
 
 
 # Data and satellite EDA --------------------------------------------------
@@ -441,7 +437,8 @@ dat <- list(
 
 t1 <- Sys.time()
 # Constructing marginal likelihood via automatic Laplace
-obj_sp1 <- MakeADFun(jnll, par, random = "w")
+obj_sp1 <- MakeADFun(jnll, par,
+                     random = "w") # telling RTMB to integrate out w
 
 # Optimising marginal likelihood
 opt_sp1 <- nlminb(obj_sp1$par, obj_sp1$fn, obj_sp1$gr) # inital inner Hessian evaluation takes time

@@ -2,6 +2,7 @@
 # https://iopscience.iop.org/article/10.3847/1538-4357/ad95f6/meta
 
 # Installing required packages
+# Newest CRAN versions of RTMB (1.9), LaMa (2.1.0), and RTMBdist (1.0.2) are required!
 # install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
 
 # devtools::install_github("janolefi/LaMa")
@@ -14,10 +15,6 @@ library(scales)     # for semi-transparent colors
 
 ### Colors for plotting
 color <- c("#00000070", "red", "orange")
-
-
-### Changing AD setting inside RTMB for faster calculations
-TapeConfig(matmul = "plain")
 
 
 
