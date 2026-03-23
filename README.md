@@ -5,7 +5,7 @@
 
 This repository contains `R` code for the case studies and simulation
 experiment presented in the paper
-<a href="https://arxiv.org/abs/2603.17469" target="blank">“Fast and
+<a href="https://arxiv.org/abs/2603.17469" target="_blank">“Fast and
 scalable inference in hidden Markov models with Gaussian fields”</a>.
 The paper develops fast frequentist estimation techniques for hidden
 Markov models involving latent Gaussian fields. Estimation is performed
