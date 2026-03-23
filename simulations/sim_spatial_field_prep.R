@@ -1,3 +1,9 @@
+####### Simulation experiment - one run for plot #######
+
+# Installing required packages
+# Newest CRAN versions of RTMB (1.9) and LaMa (2.1.0) are required!
+# install.packages(c("RTMB", "fmesher", "LaMa", "viridis", "parallel", "sf"))
+
 library(LaMa)
 library(RTMBdist)
 library(fmesher)
@@ -5,13 +11,17 @@ library(viridis)
 library(scales)
 library(sf)
 
-set.seed(38475)
+
+# seed
+set.seed(3847)
+
 
 # True spatial function for mean step length
 true_field <- function(x,y){
-  2 * (sin(2*pi*x/40) + cos(2*pi*y/40))
+  2 * (sin(2*pi*x / 40) + cos(2*pi*y / 40))
 }
 
+# True parameters used for simulation
 true_par <- list(
   delta = c(0.5, 0.5),
   mu = c(0.2, 5),
@@ -24,12 +34,17 @@ curve(dgamma2(x, true_par$mu[1], true_par$sigma[1]), xlim = c(0, 8), n = 500,
 curve(dgamma2(x, true_par$mu[2], true_par$sigma[2]), add = TRUE, n = 500)
 
 
-sim_data <- function(n, kappa_pull = 0.25, p = true_par) {
+### Function that simulates one data set
+sim_data <- function(n, # length of time series
+                     p = true_par, # parameter list
+                     kappa_pull = 0.3 # concentration for biased random walk
+) {
   s <- rep(NA, n)
   s[1] <- sample(1:2, size = 1, prob = p$delta) # first state
   loc <- matrix(0, n, 2) # initialise location matrix
   step <- rep(NA, n) # initialise step length vector
   phi <- 0 # initialise absolute heading
+  field_val <- rep(NA, n)
   for(t in 1:(n-1)) {
     # simulate step
     step[t] <- rgamma2(1, p$mu[s[t]], p$sigma[s[t]])
@@ -44,13 +59,14 @@ sim_data <- function(n, kappa_pull = 0.25, p = true_par) {
     loc[t+1,2] <- loc[t,2] + step[t] * sin(phi)
     # tpm evalutated at next location
     eta <- p$beta0
-    eta[1] <- eta[1] + true_field(loc[t+1,1], loc[t+1,2])
+    field_val[t+1] <- true_field(loc[t+1,1], loc[t+1,2])
+    eta[1] <- eta[1] + field_val[t+1]
     Gamma <- tpm(eta)
     # print(Gamma[2,1])
     # sample next state based on that tpm
     s[t+1] <- sample(1:2, 1, prob = Gamma[s[t], ])
   }
-  data.frame(step = step, x = loc[,1], y = loc[,2], state = s)
+  data.frame(step = step, x = loc[,1], y = loc[,2], state = s, field_val = field_val)
 }
 
 data <- sim_data(10000)
@@ -100,7 +116,7 @@ jnll <- function(par) {
 
 ## Spatial part part of model
 loc <- cbind(data$x, data$y)  # Spatial coordinates
-bnd1 <- fm_nonconvex_hull(loc, convex = -0.025)
+bnd1 <- fm_nonconvex_hull(loc, convex = -0.03)
 bnd2 <- fm_nonconvex_hull(loc, convex = -0.2)
 mesh <- fmesher::fm_mesh_2d(
   loc=loc,
@@ -109,7 +125,7 @@ mesh <- fmesher::fm_mesh_2d(
   cutoff=1,
   plot.delay=0.5
 )
-# plot(mesh)
+plot(mesh)
 points(data$x, data$y)
 spde <- fm_fem(mesh)
 nrow(spde$c0)
@@ -136,10 +152,10 @@ par <- list(
   log_kappa_sq = log(kappa0^2)
 )
 
-environment(jnll) <- environment()
-
+s <- Sys.time()
 obj <- MakeADFun(jnll, par, random = "w")
 opt <- nlminb(obj$par, obj$fn, obj$gr)
+Sys.time() - s
 
 mod <- report(obj)
 
@@ -158,6 +174,9 @@ g <- plogis(true_par$beta0[1] + z)
 g1 <- plogis(true_par$beta0[1] + z1)
 g2 <- plogis(true_par$beta0[1] + z2)
 
+
+
+#### Figure presented in the paper
 
 # pdf("./figs/sim_spatial_field.pdf", width = 8, height = 3.78)
 

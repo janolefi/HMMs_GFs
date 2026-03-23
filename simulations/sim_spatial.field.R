@@ -1,6 +1,7 @@
 ####### Simulation experiment - spatial field in TPM #######
 
 # Installing required packages
+# Newest CRAN versions of RTMB (1.9) and LaMa (2.1.0) are required!
 # install.packages(c("RTMB", "fmesher", "LaMa", "parallel"))
 
 
@@ -17,7 +18,7 @@ TapeConfig(matmul = "plain")
 
 # True spatial function for mean step length
 true_field <- function(x,y){
-  2 * (sin(2*pi*x/40) + cos(2*pi*y/40))
+  2 * (sin(2*pi*x / 40) + cos(2*pi*y / 40))
 }
 
 # True parameters used for simulation
