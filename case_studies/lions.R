@@ -716,13 +716,13 @@ BIC(mod0, mod1, mod_sp1, mod_sp2)
 pres1 <- pseudo_res(
   data$step,
   "gamma2",
-  list(mean = mu, sd = sigma),
+  list(mean = mod_sp1$mu, sd = mod_sp1$sigma),
   mod = mod_sp1
 )
 pres2 <- pseudo_res(
   data$step,
   "gamma2",
-  list(mean = mu, sd = sigma),
+  list(mean = mod_sp2$mu, sd = mod_sp2$sigma),
   mod = mod_sp2
 )
 par(mfrow = c(2,3))
