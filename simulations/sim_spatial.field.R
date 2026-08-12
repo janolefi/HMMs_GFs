@@ -13,9 +13,6 @@ library(LaMa)     # HMM functions
 source("utils.R")
 
 
-### Changing AD setting inside RTMB for faster calculations
-TapeConfig(matmul = "plain")
-
 # True spatial function for mean step length
 true_field <- function(x,y){
   2 * (sin(2*pi*x / 40) + cos(2*pi*y / 40))
@@ -81,6 +78,7 @@ one_fit <- function(dummy,
                     bw = 10) {
   set.seed(dummy) # for reproducibility of each iteration
 
+  library(RTMB)
   library(LaMa) # also loads RTMB
 
   ### Changing AD setting inside RTMB for faster calculations
@@ -222,6 +220,7 @@ one_fit <- function(dummy,
   ret <- mod[c("mu", "sigma", "beta0",
                "tau", "kappa",
                "fitting_time")]
+
   ret$eta21_diff <- eta21_diff
   ret$eta12_diff <- eta12_diff
   ret$cor21 <- cor21
@@ -239,7 +238,31 @@ one_fit <- function(dummy,
   ret$opt_convergence <- opt$convergence
   ret$opt_msg <- opt$message
 
+  # Coverage via the approximate joint posterior
+  nSamples <- 1000
+  sam <- MCreport(obj, nSamples=nSamples)
+
+  # pointwise coverage of the linear predictors at the observed locations
+  Xobs <- cbind(1, X)                                  # n x (1 + nNodes)
+  b1 <- sapply(1:nSamples, function(i) c(sam$beta0[[i]][1], sam$w[[i]][1,]))
+  b2 <- sapply(1:nSamples, function(i) c(sam$beta0[[i]][2], sam$w[[i]][2,]))
+  eta21_s <- as.matrix(Xobs[-1, ] %*% b1)              # (n-1) x nSamples
+  eta12_s <- as.matrix(Xobs[-1, ] %*% b2)
+  ci21 <- t(apply(eta21_s, 1, quantile, probs = c(0.025, 0.975)))
+  ci12 <- t(apply(eta12_s, 1, quantile, probs = c(0.025, 0.975)))
+  ret$cover21 <- mean(eta21 >= ci21[, 1] & eta21 <= ci21[, 2])
+  ret$cover12 <- mean(par$beta0[2] >= ci12[, 1] & par$beta0[2] <= ci12[, 2])
+
+  # coverage of the state-dependent parameters (0/1 per state, this run)
+  mu_s <- sapply(sam$log_mu, exp)
+  sigma_s <- sapply(sam$log_sigma, exp)
+  ci_mu <- apply(mu_s, 1, quantile, probs = c(0.025, 0.975))
+  ci_sigma <- apply(sigma_s, 1, quantile, probs = c(0.025, 0.975))
+  ret$cover_mu <- as.numeric(par$mu >= ci_mu[1, ] & par$mu <= ci_mu[2, ])
+  ret$cover_sigma <- as.numeric(par$sigma >= ci_sigma[1, ] & par$sigma <= ci_sigma[2, ])
+
   # cleanup
+  rm(sam)
   rm(obj)
   gc()
 
@@ -271,11 +294,12 @@ one_rep <- function(dummy, bws, ...) {
 
 
 ##### Run simulation #####
-nCores <- 3 # number of cores to use
+nCores <- 1 # number of cores to use
 nSim <- 200 # number of data sets to simulate
 
-nObs <- 10000 # time series length (has to be set to 5000, 10000 manually)
+nObs <- 5000 # time series length (has to be set to 5000, 10000 manually)
 bws <- c(2, 5, 10, 15) # bandwidths explored
+
 
 # parallelise over data sets
 # remove commenting to run
@@ -284,92 +308,68 @@ bws <- c(2, 5, 10, 15) # bandwidths explored
 #                 nObs = nObs,
 #                 par = true_par,
 #                 mc.cores = nCores) # number of cores to parallelise on
-
-# Save results
-# nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
+#
+# # Save results
+# nm <- paste0("./simulations/results/results_cover_nObs", nObs, ".rds")
 # saveRDS(res, nm)
-
-gc() # global cleanup
+#
+# gc() # global cleanup
 
 
 
 
 #### Results --------------------------------------------------------------
+library(tidyr); library(dplyr); library(patchwork); library(ggplot2)
+source("utils.R")
+col_vio <- c("2" = colorCB[1], "5" = colorCB[2], "10" = colorCB[3], "15" = colorCB[4])
 
-# Lood results
-nSim <- 200
+nSim     <- 200
+nObs_vec <- c(5000, 10000)
+bws      <- c(2, 5, 10, 15)
 
-# nObs has to be set to 5000 and then 10000 manually in order to obtain res_all
-nObs <- 10000
-nm <- paste0("./simulations/results/results_nObs", nObs, ".rds")
-res <- readRDS(nm)
-
-results <- data.frame(bw = rep(bws, each = nSim))
-bwvec <- rep(bws, each = nSim)
-for(bw in c(2, 5, 10, 15)) {
-  bwnm <- paste0("bw", bw)
-  idx <- bwvec == bw
-  results$eta12_diff[idx] <- sapply(res, function(r) r[[bwnm]]$eta12_diff)
-  results$eta21_diff[idx] <- sapply(res, function(r) r[[bwnm]]$eta21_diff)
-  results$beta0_21[idx] <- sapply(res, function(r) r[[bwnm]]$beta0[1])
-  results$beta0_12[idx] <- sapply(res, function(r) r[[bwnm]]$beta0[2])
-  results$cor21[idx] <- sapply(res, function(r) r[[bwnm]]$cor21)
-  results$cor21_g[idx] <- sapply(res, function(r) r[[bwnm]]$cor21_g)
-  results$me21[idx] <- sapply(res, function(r) r[[bwnm]]$me21)
-  results$me21_g[idx] <- sapply(res, function(r) r[[bwnm]]$me21_g)
-  results$mse21[idx] <- sapply(res, function(r) r[[bwnm]]$mse21)
-  results$mse21_g[idx] <- sapply(res, function(r) r[[bwnm]]$mse21_g)
-  results$me12[idx] <- sapply(res, function(r) r[[bwnm]]$me12)
-  results$me12_g[idx] <- sapply(res, function(r) r[[bwnm]]$me12_g)
-  results$mse12[idx] <- sapply(res, function(r) r[[bwnm]]$mse12)
-  results$mse12_g[idx] <- sapply(res, function(r) r[[bwnm]]$mse12_g)
-  results$mu1[idx] <- sapply(res, function(r) r[[bwnm]]$mu[1])
-  results$mu2[idx] <- sapply(res, function(r) r[[bwnm]]$mu[2])
-  results$sigma1[idx] <- sapply(res, function(r) r[[bwnm]]$sigma[1])
-  results$sigma2[idx] <- sapply(res, function(r) r[[bwnm]]$sigma[2])
+# safe accessor: NA for failed fits / missing fields
+get1 <- function(r, nm, i = 1) {
+  if (identical(r, "failed") || is.null(r[[nm]])) return(NA_real_)
+  r[[nm]][i]
 }
 
-results_5000 <- results
-results_5000$nObs  <- 5000
+extract_one <- function(nObs) {
+  res <- readRDS(paste0("./simulations/results/results_cover_nObs", nObs, ".rds"))
+  do.call(rbind, lapply(seq_along(res), function(s)
+    do.call(rbind, lapply(bws, function(bw) {
+      r <- res[[s]][[paste0("bw", bw)]]
+      data.frame(
+        nObs = nObs, run = s, bw = bw,
+        eta21_diff = get1(r, "eta21_diff"), eta12_diff = get1(r, "eta12_diff"),
+        beta0_21 = get1(r, "beta0", 1),     beta0_12 = get1(r, "beta0", 2),
+        cor21   = get1(r, "cor21"),   cor21_g = get1(r, "cor21_g"),
+        me21    = get1(r, "me21"),    me21_g  = get1(r, "me21_g"),
+        mse21   = get1(r, "mse21"),   mse21_g = get1(r, "mse21_g"),
+        me12    = get1(r, "me12"),    me12_g  = get1(r, "me12_g"),
+        mse12   = get1(r, "mse12"),   mse12_g = get1(r, "mse12_g"),
+        mu1     = get1(r, "mu", 1),   mu2     = get1(r, "mu", 2),
+        sigma1  = get1(r, "sigma", 1), sigma2 = get1(r, "sigma", 2),
+        cover21 = get1(r, "cover21"), cover12 = get1(r, "cover12"),
+        cover_mu1 = get1(r, "cover_mu", 1),    cover_mu2 = get1(r, "cover_mu", 2),
+        cover_sigma1 = get1(r, "cover_sigma", 1), cover_sigma2 = get1(r, "cover_sigma", 2),
+        converged = !identical(r, "failed") && isTRUE(r$opt_convergence == 0)
+      )
+    }))))
+}
 
-results_10000 <- results
-results_10000$nObs <- 10000
+res_all <- do.call(rbind, lapply(nObs_vec, extract_one))
+res_all <- res_all[res_all$converged, ]          # drop failed / non-converged fits
 
-res_all <- rbind(results_5000, results_10000)
-
-
-# Compute ROOT mean squared error
+# root mean squared errors
+res_all$rmse21   <- sqrt(res_all$mse21)
+res_all$rmse12   <- sqrt(res_all$mse12)
 res_all$rmse21_g <- sqrt(res_all$mse21_g)
 res_all$rmse12_g <- sqrt(res_all$mse12_g)
-
-res_all$rmse21 <- sqrt(res_all$mse21)
-res_all$rmse12 <- sqrt(res_all$mse12)
-
 
 
 #### Visualise results ----------------------------------------------------
 
 # install.packages(c("tidyr", "dplyr", "patchwork", "ggplot2"))
-
-library(tidyr)
-library(dplyr)
-library(patchwork)
-library(ggplot2)
-
-
-### Colors
-source("utils.R")
-col_vio <- c("2" = colorCB[1], "5" = colorCB[2], "10" = colorCB[3], "15" = colorCB[4])
-
-# pivot to long
-res_long <- res_all %>%
-  pivot_longer(
-    cols = colnames(res_all)[-c(1, 20)],
-    names_to = "parameter",
-    values_to = "value"
-  )
-
-
 
 ##### Plot for eta_12 and eta_21 #####
 
@@ -506,3 +506,10 @@ sigma_plot <- ggplot(sigma_long, aes(x = factor(bw), y = value, fill = factor(bw
   theme(legend.position = "bottom")
 # dev.off()
 
+
+coverage_summary <- res_all %>%
+  group_by(nObs, bw) %>%
+  summarise(across(c(cover21, cover12, cover_mu1, cover_mu2,
+                     cover_sigma1, cover_sigma2), ~ mean(.x, na.rm = TRUE)),
+            .groups = "drop")
+print(as.data.frame(round(coverage_summary, 2)))
