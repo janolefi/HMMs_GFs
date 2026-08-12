@@ -95,30 +95,36 @@ dat <- list(
   k = NULL
 )
 
+# regular forward algorithm -> dense Hessian
 obj_dense <- MakeADFun(jnll, par, random = "f0")
 H_dense <- obj_dense$env$spHess(random = TRUE)
 
+# banded forward algorithm with bandwidth 5
 dat$k <- 5
-obj_banded <- MakeADFun(jnll, par, random = "f0")
-H_banded <- obj_banded$env$spHess(random = TRUE)
+obj_banded_5 <- MakeADFun(jnll, par, random = "f0")
+H_banded_5 <- obj_banded_5$env$spHess(random = TRUE)
 
+# banded forward algorithm with bandwidth 10
+dat$k <- 10
+obj_banded_10 <- MakeADFun(jnll, par, random = "f0")
+H_banded_10 <- obj_banded_10$env$spHess(random = TRUE)
+
+# plotting indices
 idx <- 1:60
+
+### Produce separate plots for each panel
 
 # left panel
 # pdf("./figs/denseH.pdf", width = 5, height = 5)
 SparseM::image(H_dense[idx, idx])
 # dev.off()
 
-# right panel
-# pdf("./figs/bandedH.pdf", width = 5, height = 5)
-SparseM::image(H_banded[idx, idx])
+# middle panel
+# pdf("./figs/bandedH_10.pdf", width = 5, height = 5)
+SparseM::image(H_banded_10[idx, idx])
 # dev.off()
 
-H_dense <- as.matrix(H_dense)
-Vals <- matrix(NA, 50, 10)
-for(i in 1:50) {
-  Vals[i,] <- H_dense[i,i+1:10]
-}
-aVals <- abs(Vals)
-plot(log(colMeans(aVals)))
-
+# right panel
+# pdf("./figs/bandedH_5.pdf", width = 5, height = 5)
+SparseM::image(H_banded_5[idx, idx])
+# dev.off()
