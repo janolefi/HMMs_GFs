@@ -13,7 +13,7 @@ library(scales)     # for semi-transparent color
 library(leaflet)    # for satellite images
 
 
-### Colors for plotting and random init
+### Colors for plotting and bandwidth_check()
 source("utils.R")
 
 
@@ -353,6 +353,7 @@ mesh <- fm_mesh_2d(
   plot.delay=0.5
 )
 
+
 # pdf("./figs/lion_mesh.pdf", width = 7, height = 5)
 oldpar <- par(mfrow = c(1,1), mar = rep(0.5, 4))
 plot(mesh)
@@ -370,7 +371,7 @@ dim(spde$c0)
 X_p <- fm_basis(mesh, loc)
 
 
-# likelihood
+# Joint negative log-likelihood function (g in manuscript)
 jnll <- function(par) {
   getAll(par, dat, warn = FALSE)
 
@@ -396,6 +397,7 @@ jnll <- function(par) {
   ## HMM likelihood
   nll <- -forward_g(Delta, Gamma, lallprobs, trackID = ID,
                     bw = bw, # bandwidth parameter leading to banded Hessian
+                    ad = dat$ad,
                     logspace = TRUE) # computations on log-scale
 
   ## GMRF likelihood
@@ -436,12 +438,23 @@ dat <- list(
   bw = 15
 )
 
-t1 <- Sys.time()
+
 # Constructing marginal likelihood via automatic Laplace
 obj_sp1 <- MakeADFun(jnll, par,
                      random = "w") # telling RTMB to integrate out w
 
+# Profile log-likelihood for different bandwidth parameters
+bw_chk <- bandwidth_check(obj_sp1)
+# pdf("./figs/bw_check_lions.pdf", width = 7, height = 4)
+plot(bw_chk$bw, bw_chk$llk, type = "l", bty = "n",
+     xlab = "Bandwidth", ylab = "Log-likelihood",
+     col = "darkblue", lwd = 2, main = "Bandwidth Check - Lion case study")
+# dev.off()
+
 # Optimising marginal likelihood
+t1 <- Sys.time()
+# Reconstructing objective for accurate timing
+obj_sp1 <- MakeADFun(jnll, par, random = "w")
 opt_sp1 <- nlminb(obj_sp1$par, obj_sp1$fn, obj_sp1$gr) # inital inner Hessian evaluation takes time
 Sys.time() - t1
 
@@ -451,9 +464,11 @@ mod_sp1 <- report(obj_sp1)
 # Sampling parameters from approx posterior distribution (including random effects)
 samples_sp1 <- MCreport(obj_sp1)
 
+# State decoding
 mod_sp1$states <- viterbi_g(mod = mod_sp1)
 delta <- prop.table(table(mod_sp1$states))
 
+# Extract estimated parameters
 mu <- mod_sp1$mu
 sigma <- mod_sp1$sigma
 rho_angle <- mod_sp1$rho_angle
@@ -503,7 +518,7 @@ gc()
 
 # Model with spatial field and periodic variation in the tpm --------------
 
-# likelihood
+# Joint negative log-likelihood function (g in manuscript)
 jnll2 <- function(par) {
   getAll(par, dat, warn = FALSE)
 
@@ -574,12 +589,20 @@ obj_sp2 <- MakeADFun(jnll2, par, random = "w")
 opt_sp2 <- nlminb(obj_sp2$par, obj_sp2$fn, obj_sp2$gr)
 Sys.time() - t1
 
+# Check the Laplace approximation
+set.seed(123) # sampling based check, so setting a seed
+l_chk <- laplace_check(obj_sp2)
+l_chk
+
+# Reporting at MLE and samples from approximate posterior distribution
 mod_sp2 <- report(obj_sp2)
 samples_sp2 <- MCreport(obj_sp2)
 
+# State decoding
 mod_sp2$states <- viterbi_g(mod = mod_sp2)
 delta <- prop.table(table(mod_sp2$states)) # Monte Carlo approx to state distribution
 
+# Extract fitted parameters
 mu <- mod_sp2$mu
 sigma <- mod_sp2$sigma
 rho_angle <- mod_sp2$rho_angle
@@ -616,9 +639,10 @@ curve(delta[1] * dwrpcauchy(x, pi, rho_angle[1]) +
 
 ### Visualising estimated field in this model
 
+# computing the field
 field <- as.numeric(A %*% mod_sp2$par$w) + mod1$par$beta[1,1]
 z2 <- matrix(field, nrow = length(x_seq), ncol = length(y_seq))
-g2 <- plogis(z2)
+g2 <- plogis(z2) # on probability scale
 
 
 # cairo_pdf("./figs/lions_spatial_field.pdf", width = 7.365, height = 4.95)
@@ -667,20 +691,20 @@ image(x_seq, y_seq, z2,
 
 
 ### Plotting periodically stationary state distribution
-betas <- samples_sp2$beta
+betas <- samples_sp2$beta # samples of sine/cosine coefficients
 B <- length(betas)
-tseq <- seq(0, 24, length = 200)
-Deltas <- array(dim = c(length(tseq), 2, B))
-Delta <- matrix(NA, length(tseq), 2)
+tseq <- seq(0, 24, length = 200) # prediction time grid for plotting
+Deltas <- array(dim = c(length(tseq), 2, B))  # array to store B samples of delta
+Delta <- matrix(NA, length(tseq), 2) # Delta at MLE
 
-# Compute periodically stationary (and quantiles) on fine grid
+# Compute periodically stationary (and quantiles) on fine time grid
 for(t in seq_along(tseq)) { # takes some time
   ts <- tseq[t] + 0:23
   ts <- ts %% 24
   Z <- cosinor(ts, period = c(24,12,6))
-  Delta[t,] <-  stationary_p(tpm_g(Z, mod_sp2$par$beta), t = 1)
+  Delta[t,] <-  stationary_p(tpm_g(Z, mod_sp2$par$beta), t = 1) # MLE
   for(i in 1:B) {
-    Gamma <- tpm_g(Z, betas[[i]])
+    Gamma <- tpm_g(Z, betas[[i]]) # beta sample
     Deltas[t, ,i] <- stationary_p(Gamma, t = 1)
   }
 }
@@ -728,3 +752,71 @@ pres2 <- pseudo_res(
 par(mfrow = c(2,3))
 plot(pres1)
 plot(pres2)
+
+
+
+
+
+
+# Scaling experiment: how does computation time scale with mesh size -------
+## refitting the spatial model on a refined trianulated mesh
+
+# Clearing memory
+rm(obj0); rm(obj_sp2)
+
+# Building a larger mesh
+mesh <- fm_mesh_2d(
+  loc=loc,
+  boundary=list(bnd_inner, bnd_outer),
+  min.angle=24,
+  max.edge=c(0.03, 0.5), # smaller max edge
+  cutoff=0.005, # smaller cutoff
+  plot.delay=0.5
+)
+
+### Calculate finite element matrices c0,g1, g2 need for precision matrix Q
+spde <- fm_fem(mesh)
+dim(spde$c0) # larger mesh
+
+oldpar <- par(mfrow = c(1,1), mar = rep(0.5, 4))
+plot(mesh)
+# points(data$x, data$y, pch = 4, col = alpha("darkblue", 0.2), cex = 0.5, lwd = 0.5)
+par(oldpar)
+
+
+### Prediction matrix for observed locations
+X_p <- fm_basis(mesh, loc)
+
+
+# Initial parameters, data and hyperparameters
+par <- list(
+  eta = mod0$par$eta,
+  log_mu = log(mod0$mu),
+  log_sigma = log(mod0$sigma),
+  logit_zprob = qlogis(mod0$zprob),
+  logit_rho_angle = qlogis(mod0$rho),
+  log_tau_sq = log(0.1^2),
+  log_kappa_sq = log(10^2),
+  w = rep(0, nrow(spde$c0))
+)
+dat <- list(
+  step = data$step,
+  angle = data$angle,
+  ID = data$ID,
+  N = 2,
+  startInd = calc_trackInd(data$ID),
+  X_p = X_p,
+  c0 = spde$c0, # C
+  g1 = spde$g1, # G
+  g2 = spde$g2, # G C^{-1} G
+  bw = 15
+)
+
+# Constructing marginal likelihood via automatic Laplace
+t1 <- Sys.time()
+obj_sp1_large <- MakeADFun(jnll, par,
+                           random = "w") # telling RTMB to integrate out w
+
+# Optimising marginal likelihood
+opt_sp1_large <- nlminb(obj_sp1_large$par, obj_sp1_large$fn, obj_sp1_large$gr) # inital inner Hessian evaluation takes time
+Sys.time() - t1
