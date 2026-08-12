@@ -8,5 +8,5 @@ pdf("./figs/osc_cov.pdf", width = 7, height = 4)
 par(mfrow = c(1,1))
 curve(r(x, 0.98, 7), xlim = c(0, 10), lwd = 3, n = 1000,
       bty = "n", xlab = "|v - w|", ylab = "K(v, w)",
-      col = "deepskyblue")
+      col = LaMa::LaMaColors(2)[2])
 dev.off()
