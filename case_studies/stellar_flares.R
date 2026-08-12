@@ -12,9 +12,10 @@ library(RTMBdist)   # for ExGaussian distribution
 library(fmesher)    # for mesh and finite element matrices
 library(scales)     # for semi-transparent colors
 
+source("utils.R")
 
 ### Colors for plotting
-color <- c("#00000070", "red", "orange")
+color <- c("#00000070", "tomato1", "orange")
 
 
 
@@ -131,6 +132,9 @@ polygon(c(data$time[idx], rev(data$time[idx])),
 # The predicted trend is erratic whenever there is a flare
 # -> 2 stage methods are problematic
 
+# Clear memory
+rm(obj0); rm(samples0)
+
 
 
 # HMM analysis ------------------------------------------------------------
@@ -158,7 +162,7 @@ jnll <- function(par) {
   f1 <- w1 + mu # smooth 1
   f2 <- w2 + mu # smooth 2
   f <- c(f1, f2); REPORT(f) # quasi-periodic smooth
-  z <- y - f; REPORT(mu)
+  z <- y - f; REPORT(mu) # integrate over w instead of z since it is a linear transformation
 
   # latent z's where observations are mising -> also integrated out via Laplace
   z[is.na(y)] <- z.star; REPORT(z)
@@ -222,28 +226,50 @@ dat <- list(
   y = data$y,
   spde1 = spde1, # contains finite element matrices for f1
   spde2 = spde2, # contains finite element matrices for f2
-  bw = 20,       # bandwidth parameter enabling sparse Hessian
+  bw = 15,       # bandwidth parameter enabling sparse Hessian
   trackID = data$trackID,
   trackInd = calc_trackInd(data$trackID)
 )
 
-t1 <- Sys.time()
+
 # Constructing Laplace marginal likelihood
 obj <- MakeADFun(jnll, par, random = c("w1", "w2", "z.star"))
 
+# Profile log-likelihood for different bandwidth parameters
+bw_chk <- bandwidth_check(obj)
+# pdf("./figs/bw_check_flares.pdf", width = 7, height = 4)
+plot(bw_chk$bw, bw_chk$llk, type = "l", bty = "n",
+     xlab = "Bandwidth", ylab = "Log-likelihood",
+     col = "darkblue", lwd = 2, main = "Bandwidth Check - Stellar flare case study")
+# dev.off()
+dat$bw <- 30 # suitable bandwidth
+
+# clear memory before large fit
+rm(obj)
+
+t1 <- Sys.time()
+# Reconstructing objective for accurate timing
+obj <- MakeADFun(jnll, par, random = c("w1", "w2", "z.star"))
 # Optimising
 system.time(
   opt <- nlminb(obj$par, obj$fn, obj$gr) # inital inner Hessian evaluation takes time
 )
 Sys.time() - t1
 
+# Check accurary of the Laplace approximation
+l_chk <- laplace_check(obj)
+l_chk
+loo::psis(l_chk$logw)$diagnostics$pareto_k # is importance sampling reliable here? -> no
+
 # Reporting quantities of interest
 mod <- report(obj)
 mod$kappa
 mod$tau
 mod$omega
+round(mod$Gamma, 4)
 
 # Sampling from posterior distribution for uncertainty
+set.seed(123)
 samples <- MCreport(obj, report = TRUE) # takes some time
 
 # Computing 0.025 and 0.975 (pointwise) quantiles of f
@@ -257,65 +283,75 @@ states <- viterbi(mod = mod)
 # Soft decoding: Pr(S_t = j | y_1, ..., y_T)
 stateprobs <- stateprobs(mod = mod)
 
-## Identify flare events
-flare <- states == 2
-flare_event <- states != 1
-rle_f <- rle(flare_event)
-rle_f$lengths[1:18*2] # lengths
-round(mean(rle_f$lengths[1:18*2]) * 2, 1) # on average 17.4 minutes
 
-rle(flare)
-# 18 flaring events in total
+## Flare events across the full data set (firing + decaying merged)
+rle_all <- rle(states != 1)                       # TRUE = firing/decaying
+n_all   <- sum(rle_all$values)                    # number of flare events
+dur_all <- rle_all$lengths[rle_all$values]        # durations, in observations
+
+n_all                                             # 18 flares
+round(mean(dur_all) * 2, 1)                       # mean duration in minutes (2-min cadence)
+
+## --- Comparison window (first segment, before the gap) vs. Esquivel et al. ---
+comp_idx <- 1:end_before_gap
+rle_comp <- rle(states[comp_idx] != 1)
+n_comp   <- sum(rle_comp$values)                  # number of flares in the window
+dur_comp <- rle_comp$lengths[rle_comp$values]     # durations, in observations
+
+n_comp                                            # 11 flares
+round(mean(dur_comp), 1)                          # mean duration in observations
 
 
 
-# Plot result - main figure from the paper --------------------------------
+
+# Plot result - main figure in paper ------------------------------------
 
 # Choose which section to plot here
 idx <- 7030:7350
 
-# pdf("./figs/flare_result.pdf", width = 7, height = 4.5)
+# pdf("./figs/flare_result_new.pdf", width = 7, height = 4.5)
+cex_state <- c(0.7, 1.2, 0.9)     # quiet small, firing largest, decaying medium
 
 # Stacked barplot of state probabilities
 layout(matrix(1:2, ncol = 1), heights = c(0.6, 1))
-
 par(mar = c(1, 4, 1, 2))
-barplot(t(stateprobs[idx,]), col = c("black", "red", "orange"), border = "white", space = 0,
-        ylab = "State probability",
-        main = "", yaxt = "n")
+barplot(t(stateprobs[idx,c(1,3,2)]), col = c("black", "orange", "tomato1") , border = "white", space = 0,
+        ylab = "State probability", main = "", yaxt = "n")
 axis(2, at = c(0, 0.5, 1), labels = c(0, 0.5, 1))
 
 # Decoded time series
 par(mar = c(5, 4, 0.5, 2), xpd = NA)
-plot(data$time[idx], data$y[idx], col = color[states[idx]], pch = 16,
+plot(data$time[idx], data$y[idx], cex = cex_state[states[idx]],
+     col = color[states[idx]], pch = 16,
      xlab = "Time (days)", ylab = "Flux", bty = "n")
 # 95 % CI
 polygon(data$time[c(idx, rev(idx))],
         c(f_quantiles[idx,1], f_quantiles[rev(idx),2]),
         col = alpha("plum", 0.35), border = NA)
-lines(data$time[idx], mod$f[idx], lwd = 2, col = "plum") # line width is wider thatn CI
-
+lines(data$time[idx], mod$f[idx], lwd = 2, col = "plum")
 # Legend
-legend(x = 1335.415, y = 190,
+legend(x = 1335.415, y = 183,
        legend = c("Quiet", "Firing", "Decaying", "Trend"),
-       pch = c(rep(16, 3), NA),
-       lwd = c(rep(NA, 3), 2),
+       pch = 16, pt.cex = c(cex_state, NA),
+       lwd = c(NA, NA, NA, 2),
        col = c(color, "plum"), bty = "n")
-
 # dev.off()
 
 
 
-# Plot full time series (Appendix) ----------------------------------------
+
+
+# Plot full time series (Supplementary) ------------------------------------
 
 ch <- calc_trackInd(data$trackID)[2]
 
-# pdf("./figs/flare_result_full.pdf", width = 8, height = 4)
+# pdf("./figs/flare_result_full_new.pdf", width = 8, height = 4)
 
 # Decoded time series
 par(mfrow = c(1,1), mar = c(5, 4, 0.5, 2))
-plot(data$time, data$y, col = color[states], pch = 16, cex = 0.6,
-     xlab = "Time (days)", ylab = "Flux", bty = "n", ylim = c(-30, 160))
+plot(data$time, data$y, col = color[states], pch = 16,
+     xlab = "Time (days)", ylab = "Flux", bty = "n", ylim = c(-30, 160),
+     cex = cex_state[states])
 lines(data$time[1:(ch-1)], mod$f[1:(ch-1)], lwd = 1.5, col = "plum")
 lines(data$time[ch:nrow(data)], mod$f[ch:nrow(data)], lwd = 1.5, col = "plum")
 
@@ -325,10 +361,155 @@ rect(data$time[idx[1]-10], -30, data$time[idx[length(idx)]+10], 160,
 # Legend
 legend("topright",
        legend = c("Quiet", "Firing", "Decaying", "Trend"),
-       pch = c(rep(16, 3), NA),
-       lwd = c(rep(NA, 3), 1.5),
-       cex = 0.8, bty = "n",
-       col = c(color, "plum"), box.col = "gray")
+       pch = 16, pt.cex = c(cex_state, NA),
+       lwd = c(NA, NA, NA, 2),
+       col = c(color, "plum"), bty = "n")
 
 # dev.off()
 
+
+
+
+
+
+
+###########################################################################
+# Extra computations ------------------------------------------------------
+###########################################################################
+
+
+# Refitting the model to a subsection for more accurate Laplace check -----
+data_small <- data[2:5000,] # first observation is NA, select subsection
+mesh <- fm_mesh_1d(data_small$time)
+spde <- fm_fem(mesh)
+
+# HMM likelihood function
+jnll_small <- function(par) {
+  getAll(par, dat)
+
+  #### state process ####
+  # restricted tpm
+  Gamma <- diag(3)
+  Gamma[cbind(c(1:3, 3), c(2, 3, 1, 2))] <- exp(eta)
+  Gamma <- Gamma / rowSums(Gamma)
+  # estimated initial distributions
+  delta <- c(1, exp(logit_delta))
+  delta <- delta / sum(delta)
+
+  #### state-dependent process ####
+  # parameter transformations
+  sigma <- exp(log_sigma); REPORT(sigma)
+  r <- plogis(logit_r); REPORT(r)
+  lambda <- exp(log_lambda); REPORT(lambda)
+
+  # quasi-periodic trend
+  f <- w + mu # smooth 1
+  REPORT(f) # quasi-periodic smooth
+  z <- y - f; REPORT(mu)
+
+  # latent z's where observations are mising -> also integrated out via Laplace
+  z[is.na(y)] <- z.star; REPORT(z)
+
+  # evaluating state-dependent densities
+  n <- length(z); idx <- 2:n
+  lallprobs <- matrix(0, n, 3)
+  # regular measurement error
+  lallprobs[idx,1] <- dnorm(z[idx], 0, sigma, log = TRUE)
+  # firing
+  lallprobs[idx,2] <- dexgauss(z[idx], z[idx-1], sigma, lambda, log = TRUE)
+  # decaying
+  lallprobs[idx,3] <- dnorm(z[idx], r * z[idx-1], sigma, log = TRUE)
+
+  ### HMM likelihood
+  nll <- -forward(delta, Gamma, lallprobs,
+                  bw = bw,           # passing this enables sparsity in Hessian
+                  logspace = TRUE)   # logspace calculations more stable
+
+  ### GP likelihood
+  # parameter transformations
+  tau_sq <- exp(log_tau_sq); tau <- sqrt(tau_sq); REPORT(tau)
+  kappa_sq <- exp(log_kappa_sq); kappa <- sqrt(kappa_sq); REPORT(kappa)
+  cos_pi_omega <- 2 * plogis(u) - 1; omega <- acos(cos_pi_omega)/pi; REPORT(omega)
+
+  # building precision matrices
+  Q <- tau_sq * (kappa_sq*kappa_sq * spde$c0 + 2 * cos_pi_omega * kappa_sq * spde$g1 + spde$g2)
+
+  # evaluating densities
+  nll <- nll - dgmrf(w, 0, Q, log = TRUE) # GP likelihood
+
+  nll
+}
+
+
+# Initial parameter list
+par <- list(
+  eta = rep(-2, 4),
+  logit_delta = c(0,0),
+  log_sigma = log(7),
+  logit_r = qlogis(0.8),
+  log_lambda = log(0.025),
+  log_tau_sq = log(0.005^2),
+  log_kappa_sq = log(30^2),
+  w = rep(0, nrow(spde$c0)),
+  u = -5,
+  mu = -0.5,
+  z.star = rnorm(sum(is.na(data_small$y)), 0, 1)
+)
+
+# Data and hyperparameter list
+dat <- list(
+  y = data_small$y,
+  spde = spde,   # contains finite element matrices for f
+  bw = 30        # bandwidth parameter enabling sparse Hessian
+)
+
+
+# Fitting the model
+obj_small <- MakeADFun(jnll_small, par, random = c("w", "z.star"))
+opt_small <- nlminb(obj_small$par, obj_small$fn, obj_small$gr)
+
+# Check accurary of the Laplace approximation
+set.seed(123)
+l_chk_small <- laplace_check(obj_small)
+l_chk_small # -> reliable
+
+
+
+# Track computation times -------------------------------------------------
+
+# speed of the banded forward algorithm for different bandwidth parameters
+ks <- 2:50
+Speeds <- matrix(0, length(ks), 100)
+for(j in 1:ncol(Speeds)) {
+  speeds <- rep(0, length(ks))
+  for(i in 1:length(ks)){
+    s <- Sys.time()
+    forward(mod$delta, mod$Gamma, mod$allprobs, trackID = mod$trackID,
+            bw = ks[i], ad = TRUE) # set ad = TRUE to run R version (which has bw option)
+    speeds[i] <- Sys.time()-s
+  }
+  Speeds[,j] <- speeds
+}
+# speed of the regular forward algorithm
+speed0 <- rep(NA, 100)
+for(i in 1:length(speed0)) {
+  s <- Sys.time()
+  forward(mod$delta, mod$Gamma, mod$allprobs, trackID = mod$trackID, ad = TRUE)
+  speed0[i] <- Sys.time()-s
+}
+
+
+# pdf("./figs/computation_time.pdf", width = 6, height = 4)
+plot(ks, rowMeans(Speeds), ylim = c(0, 0.1), pch = 20, xlim = c(0, 50),
+     xlab = "Bandwidth parameter (k)", ylab = "Time (sec)", bty = "n")
+segments(x0 = 0, x1 = 50, y0 = mean(speed0), col = "darkblue")
+segments(x0 = 0, x1 = 50, y0 = 2*mean(speed0), col = "darkblue", lty = 2)
+rect(0, 0, 5, 0.1, col = "#00000010", border = NA)
+legend("topright", bty = "n",
+       legend = c("Banded forward algorithm",
+                  "Regular forward algorithm",
+                  "2x regular forward algorithm"),
+       lty = c(NA, 1, 2), pch = c(16, NA, NA), col = c("black", "darkblue", "darkblue"))
+# dev.off()
+
+# practically twice that of the regular forward algorithm
