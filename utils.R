@@ -55,3 +55,29 @@ sun_cycle_colors <- c(
   "#0e0a1e"   # 23:30
 )
 
+
+# Computes log-likelihood at current parameter value for different bandwidths and plots the result
+# this aids choosing an appropriate bandwidth
+# bw should be chosen sufficiently large that the log-likelihood value has stabilised
+bandwidth_check <- function(obj, bws = 10:40) {
+  mod <- obj$report() # run the reporting to extract required quantities
+
+  # informative error if obj is not a likelihood built based on forward()
+  if(is.null(mod$delta) | is.null(mod$Gamma) | is.null(mod$allprobs)) {
+    stop("obj does not seem to be an HMM objective function; have you called forward() in the likelihood?")
+  }
+
+  # loop over bandwidths and store log-likelihood value
+  llks <- rep(NA, length(bws))
+  for(i in 1:length(bws)) {
+    llks[i] <- forward(mod$delta, mod$Gamma, mod$allprobs, mod$trackID,
+                       ad = TRUE, bw = bws[i])
+  }
+
+  # plot the profile
+  par(mfrow = c(1,1))
+  plot(bws, llks, type = "l", bty = "n",
+       xlab = "Bandwidth", ylab = "Log-likelihood",
+       col = "darkblue", lwd = 2)
+  invisible(data.frame(bw = bws, llk = llks))
+}
