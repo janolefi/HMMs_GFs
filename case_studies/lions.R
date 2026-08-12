@@ -397,7 +397,6 @@ jnll <- function(par) {
   ## HMM likelihood
   nll <- -forward_g(Delta, Gamma, lallprobs, trackID = ID,
                     bw = bw, # bandwidth parameter leading to banded Hessian
-                    ad = dat$ad,
                     logspace = TRUE) # computations on log-scale
 
   ## GMRF likelihood
