@@ -1,4 +1,5 @@
 ####### Simulation experiment - additive GP trend #######
+# single run used for plot in the paper (Supplementary materials)
 
 # Installing required packages
 # Newest CRAN versions of RTMB (1.9) and LaMa (2.1.0) are required!
