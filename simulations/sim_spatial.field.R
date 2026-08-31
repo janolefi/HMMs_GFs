@@ -1,8 +1,11 @@
 ####### Simulation experiment - spatial field in TPM #######
 
 # Installing required packages
-# Newest CRAN versions of RTMB (1.9) and LaMa (2.1.0) are required!
-# install.packages(c("RTMB", "fmesher", "LaMa", "parallel"))
+# Versions used:
+# - RTMB: 1.9
+# - LaMa: 2.1.3
+# - fmesher: 0.8.0
+# install.packages(c("RTMB", "fmesher", "LaMa", "viridis", "sf"))
 
 
 library(parallel) # parallelising fits

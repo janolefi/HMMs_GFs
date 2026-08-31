@@ -1,9 +1,13 @@
 ####### Simulation experiment - additive GP trend #######
-# single run used for plot in the paper (Supplementary materials)
+# Single run used for plot in the paper (Supplementary materials)
 
 # Installing required packages
-# Newest CRAN versions of RTMB (1.9) and LaMa (2.1.0) are required!
-# install.packages(c("RTMB", "fmesher", "LaMa", "parallel"))
+# Versions used:
+# - RTMB: 1.9
+# - LaMa: 2.1.3
+# - RTMBdist: 1.0.6
+# - fmesher: 0.8.0
+# install.packages(c("RTMB", "LaMa", "RTMBdist", "fmesher"))
 
 
 library(parallel) # for parallelising fits

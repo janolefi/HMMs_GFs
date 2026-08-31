@@ -1,9 +1,14 @@
 ####### Case study - lions in Kalahari #######
 
 # Installing required packages
-# Newest CRAN versions of RTMB (1.9), LaMa (2.1.0), and RTMBdist (1.0.2) are required!
-# install.packages(c("RTMB", "fmesher", "LaMa", "RTMBdist"))
+# Versions used:
+# - RTMB: 1.9
+# - LaMa: 2.1.3
+# - RTMBdist: 1.0.6
+# - fmesher: 0.8.0
+# install.packages(c("RTMB", "LaMa", "RTMBdist", "fmesher"))
 # install.packages(c("viridis", "scales", "leaflet"))
+
 
 library(LaMa)       # for HMM functions
 library(RTMBdist)   # for zero-inflated gamma distribution
