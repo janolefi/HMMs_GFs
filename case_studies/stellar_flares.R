@@ -217,11 +217,11 @@ par <- list(
   log_lambda = log(0.025),
   log_tau_sq = log(0.005^2),
   log_kappa_sq = log(30^2),
-  w1 = rep(0, nrow(spde1$c0)),
-  w2 = rep(0, nrow(spde2$c0)),
+  w1 = rep(0, nrow(spde1$c0)), # GP 1 weights
+  w2 = rep(0, nrow(spde2$c0)), # GP 2 weights
   u = -5,
   mu = -0.5,
-  z.star = rnorm(sum(is.na(data$y)), 0, 3)
+  z.star = rnorm(sum(is.na(data$y)), 0, 3) # aux. variables to be integrated out
 )
 
 # Data and hyperparameter list
@@ -478,7 +478,7 @@ l_chk_small # -> reliable
 
 
 
-# Track computation times -------------------------------------------------
+# Clock computation times -------------------------------------------------
 
 # speed of the banded forward algorithm for different bandwidth parameters
 ks <- 2:50

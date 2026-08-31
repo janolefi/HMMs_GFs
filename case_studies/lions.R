@@ -762,6 +762,7 @@ plot(pres2)
 
 
 
+
 # Scaling experiment: how does computation time scale with mesh size -------
 ## refitting the spatial model on a refined trianulated mesh
 
